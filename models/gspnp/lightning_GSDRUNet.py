@@ -30,11 +30,11 @@ class StudentGrad(nn.Module):
 
 
     def forward(self, x, sigma):
-        noise_level_map = torch.FloatTensor(x.size(0), 1, x.size(2), x.size(3)).fill_(sigma).to(self.device)
+        noise_level_map = torch.FloatTensor(x.size(0), 1, x.size(2), x.size(3)).fill_(sigma).to(x.device)
         x = torch.cat((x, noise_level_map), 1)
         n = self.model(x)
         return n
-    def grad(self, x, sigma):
+    def grad(self, x, sigma,create_graph=True):
         x = x.float()
         x = x.requires_grad_()
         if x.size(2) % 8 == 0 and x.size(3) % 8 == 0:
@@ -42,7 +42,7 @@ class StudentGrad(nn.Module):
         else:
             current_model = lambda v: self(v, sigma)
             N = test_mode(current_model, x, mode=5, refield=64, min_size=256)
-        JN = torch.autograd.grad(N, x, grad_outputs=x - N, create_graph=True, only_inputs=True)[0]
+        JN = torch.autograd.grad(N, x, grad_outputs=x - N, create_graph=create_graph,only_inputs=True)[0]
         Dg = x - N - JN
         return Dg
 

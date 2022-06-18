@@ -19,14 +19,14 @@ class PNP(nn.Module):
         '''
         if self.degradation_mode == 'deblurring':
             self.k = degradation
-            self.k_tensor = array2tensor(np.expand_dims(self.k, 2)).double().to(img.device)
+            self.k_tensor = array2tensor(np.expand_dims(self.k, 2)).float().to(img.device)
             self.FB, self.FBC, self.F2B, self.FBFy = utils_sr.pre_calculate(img, self.k_tensor, 1)
         elif self.degradation_mode == 'SR':
             self.k = degradation
-            self.k_tensor = array2tensor(np.expand_dims(self.k, 2)).double().to(img.device)
+            self.k_tensor = array2tensor(np.expand_dims(self.k, 2)).float().to(img.device)
             self.FB, self.FBC, self.F2B, self.FBFy = utils_sr.pre_calculate(img, self.k_tensor, self.sf)
         elif self.degradation_mode == 'inpainting':
-            self.M = array2tensor(degradation).double().to(img.device)
+            self.M = array2tensor(degradation).to(img.device)
             self.My = self.M*img
         else:
             print('degradation mode not treated')
@@ -38,11 +38,11 @@ class PNP(nn.Module):
         :return: prox_f(img)
         '''
         if self.degradation_mode == 'deblurring':
-            rho = torch.tensor([1/self.tau]).double().repeat(1, 1, 1, 1).to(img.device)
-            px = utils_sr.data_solution(img.double(), self.FB, self.FBC, self.F2B, self.FBFy, rho, 1)
+            rho = torch.tensor([1/self.tau]).repeat(1, 1, 1, 1).float().to(img.device)
+            px = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, rho, 1)
         elif self.degradation_mode == 'SR':
-            rho = torch.tensor([1 / self.tau]).double().repeat(1, 1, 1, 1).to(img.device)
-            px = utils_sr.data_solution(img.double(), self.FB, self.FBC, self.F2B, self.FBFy, rho, self.sf)
+            rho = torch.tensor([1 / self.tau]).repeat(1, 1, 1, 1).float().to(img.device)
+            px = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, rho, self.sf)
         elif self.degradation_mode == 'inpainting':
             if self.noise_level_img > 1e-2:
                 px = (self.tau*self.My + img)/(self.tau*self.M+1)
@@ -52,13 +52,13 @@ class PNP(nn.Module):
             print('degradation mode not treated')
         return px
 
-    def forward(self, n_ipt,sigma):
+    def forward(self, n_ipt,sigma,create_graph=True):
         '''
         forward pass of the PNP
         :param n_ipt: input image NxCxHxW
         :param n_y: degraded image NxCxHxW
         '''
-        Ds= self.rObj.grad(n_ipt, sigma / 255.)
+        Ds= self.rObj.grad(n_ipt, sigma / 255.,create_graph)
         Dx=n_ipt-Ds
         z=(1-self.lamb*self.tau)*n_ipt+self.lamb*self.tau*Dx
         x=self.calculate_prox(z)

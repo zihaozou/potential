@@ -27,8 +27,8 @@ class PotentialDEQ(pl.LightningModule):
         self.val_PSNRLst=[PSNR(data_range=1.0) for _ in range(len(self.hparams.sigma_test_list)*len(self.hparams.kernelLst))]
 
 
-    def forward(self, n_y,kernel):
-        return self.deq(n_y,kernel)
+    def forward(self, n_y,kernel,sigma):
+        return self.deq(n_y,kernel,sigma)
     def training_step(self, batch, batch_idx):
         gtImg,_ = batch
         kernel=self.kernels[0,choice(self.hparams.kernelLst)]
@@ -36,9 +36,9 @@ class PotentialDEQ(pl.LightningModule):
         kernelTensor=kernelTensor.unsqueeze(0).unsqueeze(0)
         kernelTensor=kernelTensor.expand(gtImg.shape[1],gtImg.shape[1],kernelTensor.shape[2],kernelTensor.shape[3])
         degradImg=conv2d(pad(gtImg,(kernelTensor.shape[3]//2,kernelTensor.shape[3]//2,kernelTensor.shape[2]//2,kernelTensor.shape[2]//2),mode='circular'),kernelTensor)
-        noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=self.hparams.sigma/255.)
+        noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=self.hparams.sigma/255.).to(degradImg.device)
         degradImg=degradImg+noise
-        reconImg=self(degradImg,kernel)
+        reconImg=self(degradImg,kernel,self.hparams.sigma)
         loss=mse_loss(reconImg,gtImg)
         self.log('train_loss',loss.detach(), prog_bar=False)
         self.train_PSNR.update(gtImg,reconImg)
@@ -59,9 +59,9 @@ class PotentialDEQ(pl.LightningModule):
                 kernelTensor=kernelTensor.unsqueeze(0).unsqueeze(0)
                 kernelTensor=kernelTensor.expand(gtImg.shape[1],gtImg.shape[1],kernelTensor.shape[2],kernelTensor.shape[3])
                 degradImg=conv2d(pad(gtImg,(kernelTensor.shape[3]//2,kernelTensor.shape[3]//2,kernelTensor.shape[2]//2,kernelTensor.shape[2]//2),mode='circular'),kernelTensor,padding='valid')
-                noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=sigma/255.)
+                noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=sigma/255.).to(degradImg.device)
                 degradImg=degradImg+noise
-                reconImg=self(degradImg,kernel)
+                reconImg=self(degradImg,kernel,self.hparams.sigma)
                 self.val_PSNR[i*len(sigma_list)+j].update(gtImg,reconImg)
                 if batch_idx == 0: # logging for tensorboard
                     clean_grid = torchvision.utils.make_grid(gtImg.detach(),normalize=True)
@@ -76,12 +76,11 @@ class PotentialDEQ(pl.LightningModule):
         for i, kernelIdx in enumerate(kernelLst):
             for j, sigma in enumerate(sigma_list):
                 psnr=self.val_PSNR[i*len(sigma_list)+j].compute()
-                self.log(f'val_psnr/kernel-{str(i)}/sigma-{str(j)}',psnr.detach(), prog_bar=False)
-            self.val_PSNR.reset()
+                self.log(f'val_psnr/kernel-{kernelIdx}/sigma-{sigma}',psnr.detach(), prog_bar=False)
+        self.val_PSNR.reset()
         
     def configure_optimizers(self):
         optim_params = self.deq.parameters()
-        
         optimizer = Adam(optim_params, lr=self.hparams.optimizer_lr, weight_decay=0)
         scheduler = lr_scheduler.MultiStepLR(optimizer,
                                              self.hparams.scheduler_milestones,

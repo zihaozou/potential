@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from torch.autograd import grad
+from torch.autograd import grad as torch_grad
 
-def nesterov(f, x0, sigma,max_iter=150):
+def nesterov(f, x0,max_iter=150):
     """ nesterov acceleration for fixed point iteration. """
     res = []
     imgs = []
@@ -12,7 +12,7 @@ def nesterov(f, x0, sigma,max_iter=150):
     t = torch.tensor(1., dtype=torch.float32)
     for k in range(max_iter):
 
-        xnext = f(s)
+        xnext = f(s).detach()
         
         # acceleration
 
@@ -45,15 +45,15 @@ def anderson(f, x0, m=5, lam=1e-4, max_iter=50, tol=1e-5, beta = 1.0):
         n = min(k, m)
         G = F[:,:n]-X[:,:n]
         H[:,1:n+1,1:n+1] = torch.bmm(G,G.transpose(1,2)) + lam*torch.eye(n, dtype=x0.dtype,device=x0.device)[None]
+
         # (bsz x n)
-        alpha = torch.linalg.solve(
-            H[:, :n+1, :n+1], y[:, :n+1])[:, 1:n+1, 0]
-        
+        alpha = torch.solve(y[:,:n+1], H[:,:n+1,:n+1])[0][:, 1:n+1, 0]
         X[:,k%m] = beta * (alpha[:,None] @ F[:,:n])[:,0] + (1-beta)*(alpha[:,None] @ X[:,:n])[:,0]
         F[:,k%m] = f(X[:,k%m].view_as(x0)).view(bsz, -1)
         res.append((F[:,k%m] - X[:,k%m]).norm().item()/(1e-5 + F[:,k%m].norm().item()))
         if (res[-1] < tol):
             break
+
     return X[:,k%m].view_as(x0)
 
 
@@ -69,16 +69,14 @@ class DEQFixedPoint(nn.Module):
     def forward(self, n_y, kernel,sigma):
         self.f.initialize_prox(n_y,kernel)
         n_ipt=self.f.calculate_prox(n_y)
-        with torch.no_grad():
-            z= self.solver_img(lambda z : self.f(z,sigma), n_ipt, **self.kwargs)
-        
-        z = self.f(z, sigma)
+        z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, **self.kwargs)
+        z = self.f(z.requires_grad_(), sigma)
         # set up Jacobian vector product (without additional forward calls)
         if self.training:
             z0 = z.clone().detach().requires_grad_()
             f0 = self.f(z0, sigma)
             def backward_hook(grad):
-                g = self.solver_grad(lambda y : grad(f0, z0, y, retain_graph=True)[0] + grad,
+                g = self.solver_grad(lambda y : torch_grad(f0, z0, y, retain_graph=True)[0] + grad,
                                                 grad, **self.kwargs)
                 return g
             
