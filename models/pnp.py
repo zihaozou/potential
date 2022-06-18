@@ -1,8 +1,8 @@
 from turtle import forward
 import torch
 import torch.nn as nn
-from ..utils import utils_sr
-from ..utils.utils_restoration import array2tensor
+from utils import utils_sr
+from utils.utils_restoration import array2tensor
 import numpy as np
 class PNP(nn.Module):
     def __init__(self,tau,lamb,rObj,degradation_mode,sf=None):

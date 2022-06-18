@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 from dataset.data_module import DataModule
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--exp_name', type=str, default='test')
+    parser.add_argument('--exp_name', type=str, default='/export/project/zihao/potential/test')
     parser.add_argument('--GPULst', type=int,nargs='+', default=[0])
     parser=PotentialDEQ.add_model_specific_args(parser)
     parser=DataModule.add_data_specific_args(parser)
@@ -16,5 +16,5 @@ if __name__ == '__main__':
                                             val_check_interval=hparams.val_check_interval,
                                             resume_from_checkpoint=hparams.pretrained_checkpoint if hparams.resume_from_checkpoint else None,
                                             gradient_clip_val=hparams.gradient_clip_val, accelerator='ddp' if len(hparams.GPULst)>1 else None,
-                                            max_epochs = 1500)
+                                            max_epochs = 1500,num_sanity_val_steps=0)
     trainer.fit(model, dm)

@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-from gspnp.lightning_GSDRUNet import StudentGrad
-from pnp import PNP
-from deqFixedPoint import DEQFixedPoint,nesterov,anderson
+from .gspnp.lightning_GSDRUNet import StudentGrad
+from .pnp import PNP
+from .deqFixedPoint import DEQFixedPoint,nesterov,anderson
 from torchmetrics import PSNR
 from torch.nn.functional import mse_loss,conv2d,pad
 from hdf5storage import loadmat
@@ -30,7 +30,7 @@ class PotentialDEQ(pl.LightningModule):
     def forward(self, n_y,kernel):
         return self.deq(n_y,kernel)
     def training_step(self, batch, batch_idx):
-        gtImg = batch
+        gtImg,_ = batch
         kernel=self.kernels[0,choice(self.hparams.kernelLst)]
         kernelTensor=torch.tensor(kernel,dtype=torch.float32,device=gtImg.device)
         kernelTensor=kernelTensor.unsqueeze(0).unsqueeze(0)
@@ -49,7 +49,7 @@ class PotentialDEQ(pl.LightningModule):
         self.train_PSNR.reset()
     def validation_step(self, batch, batch_idx):
         batch_dict = {}
-        gtImg = batch
+        gtImg,_ = batch
         sigma_list = self.hparams.sigma_test_list
         kernelLst=self.hparams.kernelLst
         for i, kernelIdx in enumerate(kernelLst):
@@ -88,7 +88,7 @@ class PotentialDEQ(pl.LightningModule):
                                              self.hparams.scheduler_gamma)
         return [optimizer], [scheduler]
     @staticmethod
-    def add_data_specific_args(parent_parser):
+    def add_model_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--kernel_path', type=str, default='miscs/Levin09.mat', help='path to kernel mat file')
         parser.add_argument('--potential', type=str, default='gspnp', help='select potential function')
@@ -110,4 +110,6 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--resume_from_checkpoint', dest='resume_from_checkpoint', action='store_true')
         parser.set_defaults(resume_from_checkpoint=False)
         parser.add_argument('--pretrained_checkpoint', type=str,default='')
+        parser.add_argument('--gradient_clip_val', type=float, default=1e-2)
+        parser.add_argument('--val_check_interval', type=float, default=1.)
         return parser
