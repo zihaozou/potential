@@ -10,33 +10,33 @@ class DataModule(pl.LightningDataModule):
 
     def __init__(self, hparams):
         super().__init__()
-        self.hparams = hparams
-        if not self.hparams.test_resize :
-            self.hparams.batch_size_test = 1
-        self.hparams.train_dataset_path = os.path.join(self.hparams.dataset_path,'DRUNET')
-        self.hparams.test_dataset_path = os.path.join(self.hparams.dataset_path,self.hparams.dataset_name)
+        self.hparams_ = hparams
+        if not self.hparams_.test_resize :
+            self.hparams_.batch_size_test = 1
+        self.hparams_.train_dataset_path = os.path.join(self.hparams_.dataset_path,'DRUNET')
+        self.hparams_.test_dataset_path = os.path.join(self.hparams_.dataset_path,self.hparams_.dataset_name)
 
         self.train_transform = transforms.Compose([
-            transforms.RandomCrop(self.hparams.train_patch_size, pad_if_needed=True),
+            transforms.RandomCrop(self.hparams_.train_patch_size, pad_if_needed=True),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomVerticalFlip(p=0.5),
             transforms.ToTensor(),
         ])
 
-        if self.hparams.test_resize :
-            if self.hparams.test_resize_mode == 'center_crop':
+        if self.hparams_.test_resize :
+            if self.hparams_.test_resize_mode == 'center_crop':
                 self.val_transform = transforms.Compose([
-                    transforms.CenterCrop(self.hparams.test_patch_size),
+                    transforms.CenterCrop(self.hparams_.test_patch_size),
                     transforms.ToTensor()
                 ])
-            elif self.hparams.test_resize_mode == 'random_crop':
+            elif self.hparams_.test_resize_mode == 'random_crop':
                 self.val_transform = transforms.Compose([
-                    transforms.RandomCrop(self.hparams.test_patch_size,pad_if_needed=True),
+                    transforms.RandomCrop(self.hparams_.test_patch_size,pad_if_needed=True),
                     transforms.ToTensor()
                 ])
             else :
                 self.val_transform = transforms.Compose([
-                    transforms.Resize(self.hparams.test_patch_size),
+                    transforms.Resize(self.hparams_.test_patch_size),
                     transforms.ToTensor(),
                 ])
 
@@ -49,35 +49,35 @@ class DataModule(pl.LightningDataModule):
 
         # Assign train/val datasets for use in dataloaders
         if stage == 'fit' or stage is None:
-            self.dataset_train = datasets.ImageFolder(root = self.hparams.train_dataset_path, transform=self.train_transform)
-            self.dataset_val = datasets.ImageFolder(root=self.hparams.test_dataset_path, transform=self.val_transform)
+            self.dataset_train = datasets.ImageFolder(root = self.hparams_.train_dataset_path, transform=self.train_transform)
+            self.dataset_val = datasets.ImageFolder(root=self.hparams_.test_dataset_path, transform=self.val_transform)
 
         # Assign test dataset for use in dataloader(s)
         if stage == 'test' or stage is None:
-            self.dataset_test = datasets.ImageFolder(root = self.hparams.test_dataset_path, transform=self.val_transform)
+            self.dataset_test = datasets.ImageFolder(root = self.hparams_.test_dataset_path, transform=self.val_transform)
             self.dims = tuple(self.dataset_test[0][0].shape)
 
     def train_dataloader(self):
         return DataLoader(self.dataset_train,
-                          batch_size=self.hparams.batch_size_train,
-                          shuffle=self.hparams.train_shuffle,
-                          num_workers=self.hparams.num_workers_train,
+                          batch_size=self.hparams_.batch_size_train,
+                          shuffle=self.hparams_.train_shuffle,
+                          num_workers=self.hparams_.num_workers_train,
                           drop_last=True,
                           pin_memory=True)
 
     def val_dataloader(self):
         return DataLoader(self.dataset_val,
-                          batch_size=self.hparams.batch_size_test,
+                          batch_size=self.hparams_.batch_size_test,
                           shuffle=False,
-                          num_workers=self.hparams.num_workers_test,
+                          num_workers=self.hparams_.num_workers_test,
                           drop_last=True,
                           pin_memory=False)
 
     def test_dataloader(self):
         return DataLoader(self.dataset_test,
-                          batch_size=self.hparams.batch_size_test,
+                          batch_size=self.hparams_.batch_size_test,
                           shuffle=False,
-                          num_workers=self.hparams.num_workers_test,
+                          num_workers=self.hparams_.num_workers_test,
                           drop_last=False,
                           pin_memory=False)
 

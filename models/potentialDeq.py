@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 from .gspnp.lightning_GSDRUNet import StudentGrad
 from .pnp import PNP
 from .deqFixedPoint import DEQFixedPoint,nesterov,anderson
-from torchmetrics import PSNR
+from torchmetrics import PeakSignalNoiseRatio as PSNR
 from torch.nn.functional import mse_loss,conv2d,pad
 from hdf5storage import loadmat
 from random import choice

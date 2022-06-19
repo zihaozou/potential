@@ -8,7 +8,7 @@ from scipy import signal
 import scipy.stats as ss
 import scipy.io as io
 import scipy
-
+import torch.fft as torchfft
 '''
 Copyright (c) 2020 Kai Zhang (cskaizhang@gmail.com)
 '''
@@ -212,7 +212,7 @@ def p2o(psf, shape):
     otf[..., :psf.shape[2], :psf.shape[3]].copy_(psf)
     for axis, axis_size in enumerate(psf.shape[2:]):
         otf = torch.roll(otf, -int(axis_size / 2), dims=axis + 2)
-    otf = torch.rfft(otf, 2, onesided=False)
+    otf = torch.view_as_real(torchfft.fft2(otf))
     n_ops = torch.sum(torch.tensor(psf.shape).type_as(psf) * torch.log2(torch.tensor(psf.shape).type_as(psf)))
     otf[..., 1][torch.abs(otf[..., 1]) < n_ops * 2.22e-16] = torch.tensor(0).type_as(psf)
     return otf
@@ -243,14 +243,14 @@ def downsample(x, sf=3):
 
 
 def data_solution(x, FB, FBC, F2B, FBFy, alpha, sf):
-    FR = FBFy + torch.rfft(alpha * x, 2, onesided=False)
+    FR = FBFy + torch.view_as_real(torchfft.fft2(alpha * x))
     x1 = cmul(FB, FR)
     FBR = torch.mean(splits(x1, sf), dim=-1, keepdim=False)
     invW = torch.mean(splits(F2B, sf), dim=-1, keepdim=False)
     invWBR = cdiv(FBR, csum(invW, alpha))
     FCBinvWBR = cmul(FBC, invWBR.repeat(1, 1, sf, sf, 1))
     FX = (FR - FCBinvWBR) / alpha.unsqueeze(-1)
-    Xest = torch.irfft(FX, 2, onesided=False)
+    Xest = torchfft.ifft2(torch.view_as_complex(FX))
     return Xest
 
 
@@ -270,7 +270,7 @@ def pre_calculate(x, k, sf):
     FBC = cconj(FB, inplace=False)
     F2B = r2c(cabs2(FB))
     STy = upsample(x, sf=sf)
-    FBFy = cmul(FBC, torch.rfft(STy, 2, onesided=False))
+    FBFy = cmul(FBC, torch.view_as_real(torchfft.fft2(STy)))
     return FB, FBC, F2B, FBFy
 
 

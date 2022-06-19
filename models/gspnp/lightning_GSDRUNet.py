@@ -5,9 +5,8 @@ import pytorch_lightning as pl
 from torch.optim import Adam
 from torch.optim import lr_scheduler
 import random
-import torchmetrics
 from argparse import ArgumentParser
-import cv2
+
 import torchvision
 import numpy as np
 import matplotlib.pyplot as plt
