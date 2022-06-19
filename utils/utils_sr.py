@@ -250,7 +250,7 @@ def data_solution(x, FB, FBC, F2B, FBFy, alpha, sf):
     invWBR = cdiv(FBR, csum(invW, alpha))
     FCBinvWBR = cmul(FBC, invWBR.repeat(1, 1, sf, sf, 1))
     FX = (FR - FCBinvWBR) / alpha.unsqueeze(-1)
-    Xest = torchfft.ifft2(torch.view_as_complex(FX))
+    Xest = torchfft.ifft2(torch.view_as_complex(FX)).real
     return Xest
 
 
