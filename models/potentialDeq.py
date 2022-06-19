@@ -41,7 +41,7 @@ class PotentialDEQ(pl.LightningModule):
         degradImg=conv2d(pad(gtImg,(kernelTensor.shape[3]//2,kernelTensor.shape[3]//2,kernelTensor.shape[2]//2,kernelTensor.shape[2]//2),mode='circular'),kernelTensor,groups=3)
         noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=self.hparams.sigma/255.).to(degradImg.device)
         degradImg=degradImg+noise
-        reconImg=self(degradImg,kernel,self.hparams.sigma)
+        reconImg=self(degradImg,kernel,self.hparams.sigma*1.8)
         loss=mse_loss(reconImg,gtImg)
         self.log('train_loss',loss.detach(), prog_bar=False,on_step=True,logger=True)
         self.train_PSNR.update(gtImg,reconImg)
@@ -67,7 +67,7 @@ class PotentialDEQ(pl.LightningModule):
                 degradImg=conv2d(pad(gtImg,(kernelTensor.shape[3]//2,kernelTensor.shape[3]//2,kernelTensor.shape[2]//2,kernelTensor.shape[2]//2),mode='circular'),kernelTensor,groups=3)
                 noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=sigma/255.).to(degradImg.device)
                 degradImg=degradImg+noise
-                reconImg=self(degradImg,kernel,self.hparams.sigma).detach()
+                reconImg=self(degradImg,kernel,self.hparams.sigma*1.8).detach()
                 exec('self.val_PSNR_%d.update(gtImg,reconImg)'%(i*len(sigma_list)+j))
                 if batch_idx == 0: # logging for tensorboard
                     clean_grid = torchvision.utils.make_grid(gtImg.detach(),normalize=True)
@@ -100,7 +100,7 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--network', type=str, default='dncnn', help='select network')
         parser.add_argument('--numInChan', type=int, default=3, help='number of input channels')
         parser.add_argument('--numOutChan', type=int, default=3, help='number of output channels')
-        parser.add_argument('--tau', type=float, default=0.01, help='regularization parameter')
+        parser.add_argument('--tau', type=float, default=10.0, help='regularization parameter')
         parser.add_argument('--sigma', type=float, default=7.65, help='noise level')
         parser.add_argument('--lamb', type=float, default=0.1, help='regularization parameter')
         parser.add_argument('--degradation_mode', type=str, default='deblurring', choices=['deblurring','SR','inpainting'],help='select degradation mode')
@@ -117,6 +117,6 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--pretrained_checkpoint', type=str,default='')
         parser.add_argument('--gradient_clip_val', type=float, default=1e-2)
         parser.add_argument('--pretrained_denoiser', type=str, default='')
-        parser.add_argument('--enable_pretrained_denoiser', dest='get_gradient_norm', action='store_true')
+        parser.add_argument('--enable_pretrained_denoiser', dest='enable_pretrained_denoiser', action='store_true')
         parser.set_defaults(enable_pretrained_denoiser=False)
         return parser
