@@ -72,14 +72,14 @@ class DEQFixedPoint(nn.Module):
         z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, **self.kwargs)
         z = self.f(z.requires_grad_(), sigma)
         # set up Jacobian vector product (without additional forward calls)
-        if self.training:
-            z0 = z.clone().detach().requires_grad_()
-            f0 = self.f(z0, sigma)
-            def backward_hook(grad):
-                g = self.solver_grad(lambda y : torch_grad(f0, z0, y, retain_graph=True)[0] + grad,
-                                                grad, **self.kwargs)
-                return g
-            
-            z.register_hook(backward_hook)
+        # if self.training:
+        #     z0 = z.clone().detach().requires_grad_()
+        #     f0 = self.f(z0, sigma)
+        #     def backward_hook(grad):
+        #         g = self.solver_grad(lambda y : torch_grad(f0, z0, y, retain_graph=True)[0] + grad,
+        #                                         grad, **self.kwargs)
+        #         return g
+
+        #     self.hook=z.register_hook(backward_hook)
         
         return z

@@ -112,5 +112,5 @@ class PotentialDEQ(pl.LightningModule):
         parser.set_defaults(resume_from_checkpoint=False)
         parser.add_argument('--pretrained_checkpoint', type=str,default='')
         parser.add_argument('--gradient_clip_val', type=float, default=1e-2)
-        parser.add_argument('--val_check_interval', type=float, default=1.)
+        parser.add_argument('--val_check_interval', type=int, default=10)
         return parser

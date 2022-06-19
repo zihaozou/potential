@@ -7,7 +7,7 @@ import numpy as np
 class PNP(nn.Module):
     def __init__(self,tau,lamb,rObj,degradation_mode,sf=None):
         super(PNP,self).__init__()
-        self.tau = tau
+        self.tau = nn.parameter.Parameter(torch.tensor([tau]))
         self.lamb = lamb
         self.rObj = rObj
         self.degradation_mode = degradation_mode
