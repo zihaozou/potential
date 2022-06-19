@@ -78,6 +78,7 @@ class DEQFixedPoint(nn.Module):
         #     def backward_hook(grad):
         #         g = self.solver_grad(lambda y : torch_grad(f0, z0, y, retain_graph=True)[0] + grad,
         #                                         grad, **self.kwargs)
+                
         #         return g
 
         #     self.hook=z.register_hook(backward_hook)

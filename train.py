@@ -12,8 +12,7 @@ if __name__ == '__main__':
     hparams = parser.parse_args()
     model=PotentialDEQ(hparams)
     dm=DataModule(hparams)
-    trainer = pl.Trainer.from_argparse_args(hparams, default_root_dir=hparams.exp_name,gpus=hparams.GPULst, 
-                                            val_check_interval=hparams.val_check_interval,
+    trainer = pl.Trainer.from_argparse_args(hparams, default_root_dir=hparams.exp_name,gpus=hparams.GPULst,
                                             resume_from_checkpoint=hparams.pretrained_checkpoint if hparams.resume_from_checkpoint else None,
                                             gradient_clip_val=hparams.gradient_clip_val, accelerator='ddp' if len(hparams.GPULst)>1 else None,
                                             max_epochs = hparams.max_epochs,num_sanity_val_steps=1)
