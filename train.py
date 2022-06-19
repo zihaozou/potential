@@ -16,5 +16,5 @@ if __name__ == '__main__':
                                             val_check_interval=hparams.val_check_interval,
                                             resume_from_checkpoint=hparams.pretrained_checkpoint if hparams.resume_from_checkpoint else None,
                                             gradient_clip_val=hparams.gradient_clip_val, accelerator='ddp' if len(hparams.GPULst)>1 else None,
-                                            max_epochs = 1500,num_sanity_val_steps=0)
+                                            max_epochs = 1500,num_sanity_val_steps=1)
     trainer.fit(model, dm)

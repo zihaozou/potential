@@ -24,7 +24,8 @@ class PotentialDEQ(pl.LightningModule):
         self.deq=DEQFixedPoint(f,nesterov,anderson)
         self.kernels=loadmat(self.hparams.kernel_path)['kernels']
         self.train_PSNR=PSNR(data_range=1.0)
-        self.val_PSNRLst=[PSNR(data_range=1.0) for _ in range(len(self.hparams.sigma_test_list)*len(self.hparams.kernelLst))]
+        for i in range(len(self.hparams.sigma_test_list)*len(self.hparams.kernelLst)):
+            exec('self.val_PSNR_%d=PSNR(data_range=1.0)'%i)
 
 
     def forward(self, n_y,kernel,sigma):
@@ -48,6 +49,7 @@ class PotentialDEQ(pl.LightningModule):
     def training_epoch_end(self, outputs) -> None:
         self.train_PSNR.reset()
     def validation_step(self, batch, batch_idx):
+        torch.set_grad_enabled(True)
         batch_dict = {}
         gtImg,_ = batch
         sigma_list = self.hparams.sigma_test_list
@@ -58,26 +60,26 @@ class PotentialDEQ(pl.LightningModule):
                 kernelTensor=torch.tensor(kernel,dtype=torch.float32,device=gtImg.device)
                 kernelTensor=kernelTensor.unsqueeze(0).unsqueeze(0)
                 kernelTensor=kernelTensor.expand(gtImg.shape[1],gtImg.shape[1],kernelTensor.shape[2],kernelTensor.shape[3])
-                degradImg=conv2d(pad(gtImg,(kernelTensor.shape[3]//2,kernelTensor.shape[3]//2,kernelTensor.shape[2]//2,kernelTensor.shape[2]//2),mode='circular'),kernelTensor,padding='valid')
+                degradImg=conv2d(pad(gtImg,(kernelTensor.shape[3]//2,kernelTensor.shape[3]//2,kernelTensor.shape[2]//2,kernelTensor.shape[2]//2),mode='circular'),kernelTensor)
                 noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=sigma/255.).to(degradImg.device)
                 degradImg=degradImg+noise
-                reconImg=self(degradImg,kernel,self.hparams.sigma)
-                self.val_PSNR[i*len(sigma_list)+j].update(gtImg,reconImg)
+                reconImg=self(degradImg,kernel,self.hparams.sigma).detach()
+                exec('self.val_PSNR_%d.update(gtImg,reconImg)'%(i*len(sigma_list)+j))
                 if batch_idx == 0: # logging for tensorboard
                     clean_grid = torchvision.utils.make_grid(gtImg.detach(),normalize=True)
                     noisy_grid = torchvision.utils.make_grid(degradImg.detach(),normalize=True)
                     recon_grid = torchvision.utils.make_grid(reconImg.detach(),normalize=True)
-                    self.logger.experiment.add_image(f'val_image/clean/kernel-{i}/sigma-{j}', clean_grid, self.current_epoch)
-                    self.logger.experiment.add_image(f'val_image/noisy/kernel-{i}/sigma-{j}', noisy_grid, self.current_epoch)
-                    self.logger.experiment.add_image(f'val_image/recon/kernel-{i}/sigma-{j}', recon_grid, self.current_epoch)
+                    self.logger.experiment.add_image(f'val_image/clean/kernel-{kernelIdx}/sigma-{sigma}', clean_grid, self.current_epoch)
+                    self.logger.experiment.add_image(f'val_image/noisy/kernel-{kernelIdx}/sigma-{sigma}', noisy_grid, self.current_epoch)
+                    self.logger.experiment.add_image(f'val_image/recon/kernel-{kernelIdx}/sigma-{sigma}', recon_grid, self.current_epoch)
     def validation_epoch_end(self, outputs) -> None:
         sigma_list = self.hparams.sigma_test_list
         kernelLst=self.hparams.kernelLst
         for i, kernelIdx in enumerate(kernelLst):
             for j, sigma in enumerate(sigma_list):
-                psnr=self.val_PSNR[i*len(sigma_list)+j].compute()
-                self.log(f'val_psnr/kernel-{kernelIdx}/sigma-{sigma}',psnr.detach(), prog_bar=False)
-        self.val_PSNR.reset()
+                exec('psnr=self.val_PSNR_%d.compute()'%(i*len(sigma_list)+j))
+                exec(f'self.log(f"val_psnr_kernel-{kernelIdx}_sigma-{sigma}", psnr.detach(), prog_bar=False)')
+                exec('self.val_PSNR_%d.reset()'%(i*len(sigma_list)+j))
         
     def configure_optimizers(self):
         optim_params = self.deq.parameters()
