@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.autograd import grad as torch_grad
+from skimage.metrics import peak_signal_noise_ratio as psnr
 
-def nesterov(f, x0,max_iter=150):
+from utils.utils_sr import data_solution
+def nesterov(f, x0,gt,max_iter=30):
     """ nesterov acceleration for fixed point iteration. """
     res = []
     imgs = []
@@ -23,7 +25,8 @@ def nesterov(f, x0,max_iter=150):
         # update
         t = tnext
         x = xnext
-        
+        #print(x.sum().item())
+        #print(psnr(gt.detach().cpu().numpy(),x.detach().cpu().numpy(),data_range=1.0))
 
     return x
 
@@ -66,10 +69,10 @@ class DEQFixedPoint(nn.Module):
         self.solver_grad = solver_grad
         self.kwargs = kwargs
         
-    def forward(self, n_y, kernel,sigma):
+    def forward(self, n_y, gt, kernel,sigma):
         self.f.initialize_prox(n_y,kernel)
         n_ipt=self.f.calculate_prox(n_y)
-        z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, **self.kwargs)
+        z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt,gt, **self.kwargs)
         z = self.f(z.requires_grad_(), sigma)
         # set up Jacobian vector product (without additional forward calls)
         # if self.training:

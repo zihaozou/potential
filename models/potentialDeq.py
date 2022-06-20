@@ -12,6 +12,8 @@ import torchvision
 from torch.optim import Adam
 from torch.optim import lr_scheduler
 from argparse import ArgumentParser
+import numpy as np
+from scipy import ndimage
 class PotentialDEQ(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
@@ -30,24 +32,22 @@ class PotentialDEQ(pl.LightningModule):
             exec('self.val_PSNR_%d=PSNR(data_range=1.0)'%i)
 
 
-    def forward(self, n_y,kernel,sigma):
-        return self.deq(n_y,kernel,sigma)
+    def forward(self, n_y,gt,kernel,sigma):
+        return self.deq(n_y,gt,kernel,sigma)
     def training_step(self, batch, batch_idx):
         gtImg,_ = batch
         kernel=self.kernels[0,choice(self.hparams.kernelLst)]
-        kernelTensor=torch.tensor(kernel,dtype=torch.float32,device=gtImg.device)
-        kernelTensor=kernelTensor.unsqueeze(0).unsqueeze(0)
-        kernelTensor=kernelTensor.expand(gtImg.shape[1],1,kernelTensor.shape[2],kernelTensor.shape[3])
-        degradImg=conv2d(pad(gtImg,(kernelTensor.shape[3]//2,kernelTensor.shape[3]//2,kernelTensor.shape[2]//2,kernelTensor.shape[2]//2),mode='circular'),kernelTensor,groups=3)
+        degradLst=[ndimage.filters.convolve(gtImg[i,...].permute(1,2,0).cpu().numpy(), np.expand_dims(kernel, axis=2), mode='wrap') for i in range(gtImg.shape[0])]
+        degradImg=torch.tensor(np.stack(degradLst,axis=0),dtype=torch.float32,device=gtImg.device).permute(0,3,1,2)
         noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=self.hparams.sigma/255.).to(degradImg.device)
         degradImg=degradImg+noise
-        reconImg=self(degradImg,kernel,self.hparams.sigma*1.8)
+        reconImg=self(degradImg,gtImg,kernel,self.hparams.sigma*1.8)
         loss=mse_loss(reconImg,gtImg)
         self.log('train_loss',loss.detach(), prog_bar=False,on_step=True,logger=True)
         self.train_PSNR.update(gtImg,reconImg)
         psnr=self.train_PSNR.compute()
         self.log('train_psnr',psnr.detach(), prog_bar=True,on_step=True,logger=True)
-        self.log('tau',self.deq.f.tau.detach(), prog_bar=False,on_step=True,logger=True)
+        #self.log('tau',self.deq.f.tau.detach(), prog_bar=False,on_step=True,logger=True)
         return {'loss':loss}
 
     def training_epoch_end(self, outputs) -> None:
@@ -61,13 +61,11 @@ class PotentialDEQ(pl.LightningModule):
         for i, kernelIdx in enumerate(kernelLst):
             for j, sigma in enumerate(sigma_list):
                 kernel=self.kernels[0,kernelIdx]
-                kernelTensor=torch.tensor(kernel,dtype=torch.float32,device=gtImg.device)
-                kernelTensor=kernelTensor.unsqueeze(0).unsqueeze(0)
-                kernelTensor=kernelTensor.expand(gtImg.shape[1],1,kernelTensor.shape[2],kernelTensor.shape[3])
-                degradImg=conv2d(pad(gtImg,(kernelTensor.shape[3]//2,kernelTensor.shape[3]//2,kernelTensor.shape[2]//2,kernelTensor.shape[2]//2),mode='circular'),kernelTensor,groups=3)
+                degradLst=[ndimage.filters.convolve(gtImg[i,...].permute(1,2,0).cpu().numpy(), np.expand_dims(kernel, axis=2), mode='wrap') for i in range(gtImg.shape[0])]
+                degradImg=torch.tensor(np.stack(degradLst,axis=0),dtype=torch.float32,device=gtImg.device).permute(0,3,1,2)
                 noise=torch.FloatTensor(degradImg.size()).normal_(mean=0, std=sigma/255.).to(degradImg.device)
                 degradImg=degradImg+noise
-                reconImg=self(degradImg,kernel,self.hparams.sigma*1.8).detach()
+                reconImg=self(degradImg,gtImg,kernel,self.hparams.sigma*1.8).detach()
                 exec('self.val_PSNR_%d.update(gtImg,reconImg)'%(i*len(sigma_list)+j))
                 if batch_idx == 0: # logging for tensorboard
                     clean_grid = torchvision.utils.make_grid(gtImg.detach(),normalize=True)
