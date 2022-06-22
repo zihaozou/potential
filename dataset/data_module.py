@@ -98,5 +98,5 @@ class DataModule(pl.LightningDataModule):
         parser.add_argument('--batch_size_train', type=int, default=2)
         parser.add_argument('--batch_size_test', type=int, default=2)
         parser.add_argument('--test_resize_mode', type=str, default='center_crop')
-        parser.add_argument('--max_epochs', type=int, default=300)
+        parser.add_argument('--max_epochs', type=int, default=30)
         return parser

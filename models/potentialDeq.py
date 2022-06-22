@@ -98,7 +98,7 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--network', type=str, default='dncnn', help='select network')
         parser.add_argument('--numInChan', type=int, default=3, help='number of input channels')
         parser.add_argument('--numOutChan', type=int, default=3, help='number of output channels')
-        parser.add_argument('--tau', type=float, default=10., help='regularization parameter')
+        parser.add_argument('--tau', type=float, default=10.0, help='regularization parameter')
         parser.add_argument('--sigma', type=float, default=7.65, help='noise level')
         parser.add_argument('--lamb', type=float, default=0.1, help='regularization parameter')
         parser.add_argument('--degradation_mode', type=str, default='deblurring', choices=['deblurring','SR','inpainting'],help='select degradation mode')

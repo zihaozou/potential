@@ -60,6 +60,6 @@ class PNP(nn.Module):
         '''
         Ds= self.rObj.grad(n_ipt, sigma / 255.,create_graph)
         Dx=n_ipt-Ds
-        z=(1-self.lamb*self.tau)*n_ipt+self.lamb*self.tau*Dx
+        z=(1-torch.sigmoid(self.tau))*n_ipt+torch.sigmoid(self.tau)*Dx
         x=self.calculate_prox(z)
         return x
