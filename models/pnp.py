@@ -63,3 +63,35 @@ class PNP(nn.Module):
         z=(1-torch.sigmoid(self.tau))*n_ipt+torch.sigmoid(self.tau)*Dx
         x=self.calculate_prox(z)
         return x
+
+
+class DPIRPNP(nn.Module):
+    def __init__(self,tau,alpha,rObj):
+        super(DPIRPNP,self).__init__()
+        self.rObj=rObj
+        self.tau=torch.nn.parameter.Parameter(torch.tensor(tau),requires_grad=False)
+        self.alpha=torch.nn.parameter.Parameter(torch.tensor(alpha),requires_grad=False)
+    def initialize_prox(self, img, degradation):
+        '''
+        calculus for future prox computatations
+        :param img: degraded image
+        :param degradation: 2D blur kernel for deblurring and SR, mask for inpainting
+        '''
+        self.k = degradation
+        self.k_tensor = array2tensor(np.expand_dims(self.k, 2)).float().to(img.device)
+        self.FB, self.FBC, self.F2B, self.FBFy = utils_sr.pre_calculate(img, self.k_tensor, 1)
+        
+
+    def calculate_prox(self, img):
+        '''
+        Calculation of the proximal mapping of the data term f
+        :param img: input for the prox
+        :return: prox_f(img)
+        '''
+        proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=torch.tensor(0.05,device=img.device), sf=1)
+        return proxf
+    def forward(self,x,sigma,create_graph):
+        vnext=self.calculate_prox(x)
+        Px=self.rObj(vnext,sigma/255.,self.tau,create_graph)
+        xnext= torch.clamp((1-self.alpha)*vnext+self.alpha*Px,min=0.0)
+        return xnext
