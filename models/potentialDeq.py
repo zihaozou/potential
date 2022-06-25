@@ -28,7 +28,7 @@ class PotentialDEQ(pl.LightningModule):
             pass #TODO 加入 red potential function
         elif self.hparams.potential=='dpir':
             model=NNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan)
-        f=DPIRPNP(self.hparams.tau,self.hparams.alpha,model,self.hparams.train_tau_alpha)
+        f=DPIRPNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb)
         self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf)
         if self.hparams.enable_pretrained_denoiser:
             self.deq.f.rObj.network.load_state_dict(torch.load(self.hparams.pretrained_denoiser,map_location=torch.device('cpu')))
@@ -63,7 +63,7 @@ class PotentialDEQ(pl.LightningModule):
         psnr=self.train_PSNR.compute()
         self.log('train_psnr',psnr.detach(), prog_bar=True,on_step=True,logger=True)
         self.log('tau',self.deq.f.tau.detach(), prog_bar=False,on_step=True,logger=True)
-        self.log('alpha',self.deq.f.alpha.detach(), prog_bar=False,on_step=True,logger=True)
+        self.log('lamb',self.deq.f.lamb.detach(), prog_bar=False,on_step=True,logger=True)
         self.log('sigma factor',self.deq.sigmaFactor.detach(), prog_bar=False,on_step=True,logger=True)
         return {'loss':loss}
 
@@ -111,17 +111,17 @@ class PotentialDEQ(pl.LightningModule):
                 print(f'test image psnr: {skpsnr(testTensor[0,...].detach().permute(1,2,0).cpu().numpy(),reconImg[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0)}')
                 self.val_PSNR_butterfly.update(testTensor[0,...].unsqueeze(0),reconImg[0,...].unsqueeze(0))
                 psnr=self.val_PSNR_butterfly.compute()
-                self.logger.experiment.add_scalar(f'val_butterfly_psnr_kernel-{kernelIdx}_sigma-{sigma}',psnr.detach().item(),self.current_epoch)
+                self.log(f'val_butterfly_psnr_kernel-{kernelIdx}_sigma-{sigma}',psnr.detach())
                 self.val_PSNR_butterfly.reset()
 
                 self.val_PSNR_leaves.update(testTensor[1,...].unsqueeze(0),reconImg[1,...].unsqueeze(0))
                 psnr=self.val_PSNR_leaves.compute()
-                self.logger.experiment.add_scalar(f'val_leaves_psnr_kernel-{kernelIdx}_sigma-{sigma}',psnr.detach().item(),self.current_epoch)
+                self.log(f'val_leaves_psnr_kernel-{kernelIdx}_sigma-{sigma}',psnr.detach())
                 self.val_PSNR_leaves.reset()
 
                 self.val_PSNR_starfish.update(testTensor[2,...].unsqueeze(0),reconImg[2,...].unsqueeze(0))
                 psnr=self.val_PSNR_starfish.compute()
-                self.logger.experiment.add_scalar(f'val_starfish_psnr_kernel-{kernelIdx}_sigma-{sigma}',psnr.detach().item(),self.current_epoch)
+                self.log(f'val_starfish_psnr_kernel-{kernelIdx}_sigma-{sigma}',psnr.detach())
                 self.val_PSNR_starfish.reset()
 
                 clean_grid = torchvision.utils.make_grid(testTensor.detach(),normalize=True,nrow=2)
@@ -131,7 +131,7 @@ class PotentialDEQ(pl.LightningModule):
                 self.logger.experiment.add_image(f'test_image/noisy/kernel-{kernelIdx}/sigma-{sigma}', noisy_grid, self.current_epoch)
                 self.logger.experiment.add_image(f'test_image/recon/kernel-{kernelIdx}/sigma-{sigma}', recon_grid, self.current_epoch)
     def configure_optimizers(self):
-        optim_params = [{'params': self.deq.f.rObj.parameters()},{'params': self.deq.sigmaFactor,'lr':1e-3}]
+        optim_params = [{'params': self.deq.f.rObj.parameters()},{'params': self.deq.sigmaFactor,'lr':1e-3},{'params': self.deq.f.lamb,'lr':1e-3},{'params': self.deq.f.tau,'lr':1e-3}]
         optimizer = Adam(optim_params, lr=self.hparams.optimizer_lr, weight_decay=0)
         scheduler = lr_scheduler.MultiStepLR(optimizer,
                                              self.hparams.scheduler_milestones,
@@ -145,11 +145,11 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--network', type=str, default='dncnn', help='select network')
         parser.add_argument('--numInChan', type=int, default=3, help='number of input channels')
         parser.add_argument('--numOutChan', type=int, default=3, help='number of output channels')
-        parser.add_argument('--tau', type=float, default=1.0, help='regularization parameter')
+        parser.add_argument('--tau', type=float, default=10.0, help='regularization parameter')
         parser.add_argument('--sigma', type=float, default=2.55, help='noise level')
-        parser.add_argument('--alpha', type=float, default=0.9, help='regularization parameter')
-        parser.add_argument('--train_tau_alpha',dest='train_tau_alpha',action='store_true')
-        parser.set_defaults(train_tau_alpha=False)
+        parser.add_argument('--lamb', type=float, default=0.1, help='regularization parameter')
+        parser.add_argument('--train_tau_lamb',dest='train_tau_lamb',action='store_true')
+        parser.set_defaults(train_tau_lamb=False)
         parser.add_argument('--degradation_mode', type=str, default='deblurring', choices=['deblurring','SR','inpainting'],help='select degradation mode')
         #SR
         parser.add_argument('--sf', type=int, default=2)
