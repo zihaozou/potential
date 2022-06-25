@@ -66,11 +66,11 @@ class PNP(nn.Module):
 
 
 class DPIRPNP(nn.Module):
-    def __init__(self,tau,alpha,rObj):
+    def __init__(self,tau,alpha,rObj,train_tau_alpha):
         super(DPIRPNP,self).__init__()
         self.rObj=rObj
-        self.tau=torch.nn.parameter.Parameter(torch.tensor(tau),requires_grad=False)
-        self.alpha=torch.nn.parameter.Parameter(torch.tensor(alpha),requires_grad=False)
+        self.tau=torch.nn.parameter.Parameter(torch.tensor(tau),requires_grad=train_tau_alpha)
+        self.alpha=torch.nn.parameter.Parameter(torch.tensor(alpha),requires_grad=train_tau_alpha)
     def initialize_prox(self, img, degradation):
         '''
         calculus for future prox computatations
@@ -88,10 +88,15 @@ class DPIRPNP(nn.Module):
         :param img: input for the prox
         :return: prox_f(img)
         '''
-        proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=torch.tensor(0.05,device=img.device), sf=1)
+        proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=torch.tensor(0.1,device=img.device), sf=1)
         return proxf
     def forward(self,x,sigma,create_graph):
-        vnext=self.calculate_prox(x)
-        Px=self.rObj(vnext,sigma/255.,self.tau,create_graph)
-        xnext= torch.clamp((1-self.alpha)*vnext+self.alpha*Px,min=0.0)
+        x.requires_grad_()
+        Dx=self.rObj(x,sigma/255.,self.tau,create_graph)
+        z=(1.0-0.1*10.0)*x+1.0*Dx
+        xnext=self.calculate_prox(z)
         return xnext
+    def denoise(self,x,sigma,create_graph):
+        Dx=self.rObj(x,sigma/255.,self.tau,create_graph)
+        z=(1.0-0.1*10.0)*x+1.0*Dx
+        return z

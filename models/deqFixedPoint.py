@@ -1,8 +1,13 @@
 import torch
 import torch.nn as nn
 from torch.autograd import grad as torch_grad
+from skimage.metrics import peak_signal_noise_ratio as PSNR
 
-def nesterov(f, x0,max_iter=40):
+
+def mypsnr(img1,img2):
+    mse = torch.mean((img1 - img2) ** 2)
+    return 20 * torch.log10(255.0 / torch.sqrt(mse))
+def nesterov(f, x0,gt,max_iter=30):
     """ nesterov acceleration for fixed point iteration. """
     res = []
     imgs = []
@@ -23,11 +28,11 @@ def nesterov(f, x0,max_iter=40):
         # update
         t = tnext
         x = xnext
-        
+        print(PSNR(x[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0))
 
     return x
 
-def anderson(f, x0, m=5, lam=1e-4, max_iter=40, tol=1e-5, beta = 1.0):
+def anderson(f, x0, m=5, lam=1e-4, max_iter=30, tol=1e-5, beta = 1.0):
     """ Anderson acceleration for fixed point iteration. """
     bsz, d, H, W = x0.shape
     X = torch.zeros(bsz, m, d*H*W, dtype=x0.dtype, device=x0.device)
@@ -47,7 +52,7 @@ def anderson(f, x0, m=5, lam=1e-4, max_iter=40, tol=1e-5, beta = 1.0):
         H[:,1:n+1,1:n+1] = torch.bmm(G,G.transpose(1,2)) + lam*torch.eye(n, dtype=x0.dtype,device=x0.device)[None]
 
         # (bsz x n)
-        alpha = torch.solve(y[:,:n+1], H[:,:n+1,:n+1])[0][:, 1:n+1, 0]
+        alpha = torch.linalg.solve(H[:,:n+1,:n+1], y[:,:n+1])[:, 1:n+1, 0]
         X[:,k%m] = beta * (alpha[:,None] @ F[:,:n])[:,0] + (1-beta)*(alpha[:,None] @ X[:,:n])[:,0]
         F[:,k%m] = f(X[:,k%m].view_as(x0)).view(bsz, -1)
         res.append((F[:,k%m] - X[:,k%m]).norm().item()/(1e-5 + F[:,k%m].norm().item()))
@@ -56,13 +61,17 @@ def anderson(f, x0, m=5, lam=1e-4, max_iter=40, tol=1e-5, beta = 1.0):
 
     return X[:,k%m].view_as(x0)
 
-def simpleIter(f, x0, max_iter=40, tol=1e-5):
+def simpleIter(f, x0, gt,max_iter=30, tol=1e-5):
     x=x0
+    lastpsnr=mypsnr(gt,x0)
     for k in range(max_iter):
         xnext = f(x).detach()
-        if ((xnext-x).norm().item() < tol):
+        nowpsnr=mypsnr(gt,xnext)
+        #print(nowpsnr)
+        if mypsnr(gt,xnext)<lastpsnr:
             break
         x = xnext
+        lastpsnr=nowpsnr
     return x
 class DEQFixedPoint(nn.Module):
     def __init__(self, f, solver_img, solver_grad, **kwargs):
@@ -72,13 +81,13 @@ class DEQFixedPoint(nn.Module):
         self.solver_grad = solver_grad
         self.kwargs = kwargs
         self.sigmaFactor=torch.nn.parameter.Parameter(torch.tensor([1.8]))
-    def forward(self, n_y, kernel,sigma):
+    def forward(self, n_y, kernel,sigma,gt):
         n_y.requires_grad_()
         sigma=sigma*self.sigmaFactor
         self.f.initialize_prox(n_y,kernel)
         n_ipt=self.f.calculate_prox(n_y)
-        z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, **self.kwargs)
-        z = self.f(z, sigma,True)
+        z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, gt,**self.kwargs)
+        z = self.f(z, sigma,self.training)
         # set up Jacobian vector product (without additional forward calls)
         if self.training:
             z0 = z.clone().detach().requires_grad_()
@@ -93,5 +102,6 @@ class DEQFixedPoint(nn.Module):
                 return g
 
             self.hook=z.register_hook(backward_hook)
-        
-        return z
+        output=self.f.denoise(z,sigma,self.training)
+        # print(PSNR(output[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0))
+        return output
