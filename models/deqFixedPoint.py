@@ -74,13 +74,14 @@ def simpleIter(f, x0, gt,max_iter=30, tol=1e-5):
         lastpsnr=nowpsnr
     return x
 class DEQFixedPoint(nn.Module):
-    def __init__(self, f, solver_img, solver_grad, **kwargs):
+    def __init__(self, f, solver_img, solver_grad, jbf,**kwargs):
         super().__init__()
         self.f = f
         self.solver_img = solver_img
         self.solver_grad = solver_grad
         self.kwargs = kwargs
         self.sigmaFactor=torch.nn.parameter.Parameter(torch.tensor([1.8]))
+        self.jbf=jbf
     def forward(self, n_y, kernel,sigma,gt):
         n_y.requires_grad_()
         sigma=sigma*self.sigmaFactor
@@ -89,7 +90,7 @@ class DEQFixedPoint(nn.Module):
         z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, gt,**self.kwargs)
         z = self.f(z, sigma,self.training)
         # set up Jacobian vector product (without additional forward calls)
-        if self.training:
+        if self.training and not self.jbf:
             z0 = z.clone().detach().requires_grad_()
             f0 = self.f(z0, sigma,True)
             def backward_hook(grad):

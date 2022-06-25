@@ -29,15 +29,15 @@ class PotentialDEQ(pl.LightningModule):
         elif self.hparams.potential=='dpir':
             model=NNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan)
         f=DPIRPNP(self.hparams.tau,self.hparams.alpha,model,self.hparams.train_tau_alpha)
-        self.deq=DEQFixedPoint(f,simpleIter,anderson)
+        self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf)
         if self.hparams.enable_pretrained_denoiser:
             self.deq.f.rObj.network.load_state_dict(torch.load(self.hparams.pretrained_denoiser,map_location=torch.device('cpu')))
         self.kernels=loadmat(self.hparams.kernel_path)['kernels']
         self.train_PSNR=PSNR(data_range=1.0)
         for i in range(len(self.hparams.sigma_test_list)*len(self.hparams.kernelLst)):
             exec('self.val_PSNR_%d=PSNR(data_range=1.0)'%i)
-        self.testArrBlur=np.asarray(imopen('/export/project/zihao/potential/img_0_blur.png')).transpose(2,0,1)/255.
-        self.testArrGt=np.asarray(imopen('/export/project/zihao/potential/img_0_input.png')).transpose(2,0,1)/255.
+        self.testArrBlur=np.asarray(imopen('img_0_blur.png')).transpose(2,0,1)/255.
+        self.testArrGt=np.asarray(imopen('img_0_input.png')).transpose(2,0,1)/255.
         testLst=[]
         imLst=['butterfly.png','leaves.png','starfish.png']
         for i in range(3):
@@ -131,7 +131,7 @@ class PotentialDEQ(pl.LightningModule):
                 self.logger.experiment.add_image(f'test_image/noisy/kernel-{kernelIdx}/sigma-{sigma}', noisy_grid, self.current_epoch)
                 self.logger.experiment.add_image(f'test_image/recon/kernel-{kernelIdx}/sigma-{sigma}', recon_grid, self.current_epoch)
     def configure_optimizers(self):
-        optim_params = [{'params': self.deq.f.rObj.parameters()}]
+        optim_params = [{'params': self.deq.f.rObj.parameters()},{'params': self.deq.sigmaFactor,'lr':1e-3}]
         optimizer = Adam(optim_params, lr=self.hparams.optimizer_lr, weight_decay=0)
         scheduler = lr_scheduler.MultiStepLR(optimizer,
                                              self.hparams.scheduler_milestones,
@@ -166,4 +166,6 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--pretrained_denoiser', type=str, default='')
         parser.add_argument('--enable_pretrained_denoiser', dest='enable_pretrained_denoiser', action='store_true')
         parser.set_defaults(enable_pretrained_denoiser=False)
+        parser.add_argument('--jbf',dest='jbf',action='store_true')
+        parser.set_defaults(jbf=False)
         return parser
