@@ -22,3 +22,10 @@ class NNclass2(nn.Module):
         N = self.network(x_noise_map)
         JN = torch.autograd.grad(N, x, grad_outputs=x - N, create_graph=create_graph,only_inputs=True)[0]
         return N + JN
+    def calculate_grad(self,x,sigma):
+        x.requires_grad_()
+        noise_level_map = torch.tensor([sigma],device=x.device,dtype=x.dtype).expand(x.size(0),1,x.size(2),x.size(3))
+        x_noise_map = torch.cat((x, noise_level_map), 1)
+        N = self.network(x_noise_map)
+        JN = torch.autograd.grad(N, x, grad_outputs=x - N, create_graph=False,only_inputs=True)[0]
+        return x-N-JN, N

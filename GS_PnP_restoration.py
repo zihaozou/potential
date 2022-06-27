@@ -8,7 +8,8 @@ from argparse import ArgumentParser
 from utils.utils_restoration import rgb2y, psnr, array2tensor, tensor2array
 import sys
 from matplotlib.ticker import MaxNLocator
-
+from models.pnp import DPIRPNP
+from models.dpirUnet import NNclass2
 
 class PnP_restoration():
 
@@ -22,25 +23,9 @@ class PnP_restoration():
         '''
         Initialize the denoiser model with the given pretrained ckpt
         '''
-        sys.path.append('../GS_denoising/')
-        from lightning_GSDRUNet import GradMatch
-        parser2 = ArgumentParser(prog='utils_restoration.py')
-        parser2 = GradMatch.add_model_specific_args(parser2)
-        parser2 = GradMatch.add_optim_specific_args(parser2)
-        hparams = parser2.parse_known_args()[0]
-        if 'nb_4' in self.hparams.pretrained_checkpoint :
-            hparams.DRUNET_nb = 4
-        self.denoiser_model = GradMatch(hparams)
-        checkpoint = torch.load(self.hparams.pretrained_checkpoint, map_location=self.device)
-        self.denoiser_model.load_state_dict(checkpoint['state_dict'])
-        self.denoiser_model.eval()
-        for i, v in self.denoiser_model.named_parameters():
-            v.requires_grad = False
-        self.denoiser_model = self.denoiser_model.to(self.device)
-        if self.hparams.precision == 'double' :
-            if self.denoiser_model is not None:
-                self.denoiser_model.double()
-
+        self.denoiser_model=NNclass2(3,3)
+        self.denoiser_model.network.load_state_dict(torch.load('pretrained/k-all_sigma-2.55.pt'))
+        self.denoiser_model.to(self.device)
     def initialize_prox(self, img, degradation):
         '''
         calculus for future prox computatations
@@ -80,7 +65,7 @@ class PnP_restoration():
                 px = self.My + (1-self.M)*img
         else:
             print('degradation mode not treated')
-        return px
+        return px.to(torch.float32)
 
     def calculate_F(self,x,s,img):
         '''
@@ -166,9 +151,9 @@ class PnP_restoration():
 
             #Denoising of x_old and calculation of F_old
             Ds, f = self.denoiser_model.calculate_grad(x_old, self.sigma_denoiser / 255.)
-            Ds = Ds.detach()
+            Ds = Ds.detach() 
             f = f.detach()
-            Dx = x_old - self.denoiser_model.hparams.weight_Ds * Ds
+            Dx = x_old - 1.0 * Ds
             s_old = 0.5 * (torch.norm(x_old.double() - f.double(), p=2) ** 2)
             F_old = self.calculate_F(x_old, s_old, img_tensor)
 
@@ -226,12 +211,12 @@ class PnP_restoration():
             Ds, f = self.denoiser_model.calculate_grad(x, self.sigma_denoiser / 255.)
             Ds = Ds.detach()
             f = f.detach()
-            Dx = x - self.denoiser_model.hparams.weight_Ds * Ds.detach()
+            Dx = x - 1.0 * Ds.detach()
             s = 0.5 * (torch.norm(x.double() - f.double(), p=2) ** 2)
         else:
             Ds, _ = self.denoiser_model.calculate_grad(x, self.sigma_denoiser / 255.)
             Ds = Ds.detach()
-            Dx = x - self.denoiser_model.hparams.weight_Ds * Ds
+            Dx = x - 1.0 * Ds
 
         z = (1 - self.hparams.lamb * self.tau) * x + self.hparams.lamb * self.tau * Dx
 
@@ -350,7 +335,7 @@ class PnP_restoration():
     def add_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--denoiser_name', type=str, default='GS-DRUNet')
-        parser.add_argument('--dataset_path', type=str, default='../datasets')
+        parser.add_argument('--dataset_path', type=str, default='set3c')
         parser.add_argument('--pretrained_checkpoint', type=str,default='../GS_denoising/ckpts/GSDRUNet.ckpt')
         parser.add_argument('--PnP_algo', type=str, default='HQS')
         parser.add_argument('--dataset_name', type=str, default='CBSD10')

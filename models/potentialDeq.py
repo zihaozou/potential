@@ -69,6 +69,7 @@ class PotentialDEQ(pl.LightningModule):
 
     def training_epoch_end(self, outputs) -> None:
         self.train_PSNR.reset()
+        torch.save(self.deq.state_dict(),join(self.hparams.exp_name,f'epoch_{self.current_epoch}.pt'))
     def validation_step(self, batch, batch_idx):
         torch.set_grad_enabled(True)
         batch_dict = {}
@@ -87,7 +88,6 @@ class PotentialDEQ(pl.LightningModule):
                     self.logger.experiment.add_image(f'val_image/clean/kernel-{kernelIdx}/sigma-{sigma}', clean_grid, self.current_epoch)
                     self.logger.experiment.add_image(f'val_image/noisy/kernel-{kernelIdx}/sigma-{sigma}', noisy_grid, self.current_epoch)
                     self.logger.experiment.add_image(f'val_image/recon/kernel-{kernelIdx}/sigma-{sigma}', recon_grid, self.current_epoch)
-        
     def validation_epoch_end(self, outputs) -> None:
         sigma_list = self.hparams.sigma_test_list
         kernelLst=self.hparams.kernelLst
