@@ -24,7 +24,7 @@ class PnP_restoration():
         Initialize the denoiser model with the given pretrained ckpt
         '''
         self.denoiser_model=NNclass2(3,3)
-        self.denoiser_model.network.load_state_dict(torch.load('pretrained/k-all_sigma-2.55.pt'))
+        self.denoiser_model.network.load_state_dict(torch.load(self.hparams.pretrained_checkpoint))
         self.denoiser_model.to(self.device)
     def initialize_prox(self, img, degradation):
         '''
@@ -336,7 +336,7 @@ class PnP_restoration():
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--denoiser_name', type=str, default='GS-DRUNet')
         parser.add_argument('--dataset_path', type=str, default='set3c')
-        parser.add_argument('--pretrained_checkpoint', type=str,default='../GS_denoising/ckpts/GSDRUNet.ckpt')
+        parser.add_argument('--pretrained_checkpoint', type=str,default='pretrained/k-all_sigma-random.pt')
         parser.add_argument('--PnP_algo', type=str, default='HQS')
         parser.add_argument('--dataset_name', type=str, default='CBSD10')
         parser.add_argument('--sigma_denoiser', type=float)

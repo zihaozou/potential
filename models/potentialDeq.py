@@ -7,7 +7,7 @@ from .deqFixedPoint import DEQFixedPoint,nesterov,anderson, simpleIter
 from torchmetrics import PeakSignalNoiseRatio as PSNR
 from torch.nn.functional import mse_loss,conv2d,pad
 from hdf5storage import loadmat
-from random import choice
+from random import choice,uniform
 import torchvision
 from torch.optim import Adam
 from torch.optim import lr_scheduler
@@ -18,6 +18,7 @@ from os.path import join
 from PIL.Image import open as imopen
 from .dpirUnet import NNclass,NNclass2
 from skimage.metrics import peak_signal_noise_ratio as skpsnr
+
 class PotentialDEQ(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
@@ -55,8 +56,9 @@ class PotentialDEQ(pl.LightningModule):
         return degradImg,kernel
     def training_step(self, batch, batch_idx):
         gtImg,_ = batch
-        degradImg,kernel=self.makeDegrad(gtImg,choice(self.hparams.kernelLst),self.hparams.sigma)
-        reconImg=self(degradImg,kernel,self.hparams.sigma,gtImg)
+        sigma=uniform(self.hparams.sigma_min,self.hparams.sigma_max)
+        degradImg,kernel=self.makeDegrad(gtImg,choice(self.hparams.kernelLst),sigma)
+        reconImg=self(degradImg,kernel,sigma,gtImg)
         loss=mse_loss(reconImg,gtImg)
         self.log('train_loss',loss.detach(), prog_bar=False,on_step=True,logger=True)
         self.train_PSNR.update(gtImg,reconImg)
@@ -146,7 +148,8 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--numInChan', type=int, default=3, help='number of input channels')
         parser.add_argument('--numOutChan', type=int, default=3, help='number of output channels')
         parser.add_argument('--tau', type=float, default=10.0, help='regularization parameter')
-        parser.add_argument('--sigma', type=float, default=2.55, help='noise level')
+        parser.add_argument('--sigma_min', type=float, default=2.55, help='noise level')
+        parser.add_argument('--sigma_max', type=float, default=7.65, help='noise level')
         parser.add_argument('--lamb', type=float, default=0.1, help='regularization parameter')
         parser.add_argument('--train_tau_lamb',dest='train_tau_lamb',action='store_true')
         parser.set_defaults(train_tau_lamb=False)
