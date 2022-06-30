@@ -66,14 +66,13 @@ class PNP(nn.Module):
 
 
 class DPIRPNP(nn.Module):
-    def __init__(self,tau,lamb,rObj,train_tau_lamb,degradation_mode,sf=None):
+    def __init__(self,tau,lamb,rObj,train_tau_lamb,degradation_mode):
         super(DPIRPNP,self).__init__()
         self.rObj=rObj
         self.tau=torch.nn.parameter.Parameter(torch.tensor(tau),requires_grad=train_tau_lamb)
         self.lamb=torch.nn.parameter.Parameter(torch.tensor(lamb),requires_grad=train_tau_lamb)
         self.degradation_mode=degradation_mode
-        self.sf=sf
-    def initialize_prox(self, img, degradation,noise_level_img):
+    def initialize_prox(self, img, degradation,noise_level_img,sf):
         '''
         calculus for future prox computatations
         :param img: degraded image
@@ -86,9 +85,9 @@ class DPIRPNP(nn.Module):
         elif self.degradation_mode == 'SR':
             self.k = degradation
             self.k_tensor = array2tensor(np.expand_dims(self.k, 2)).float().to(img.device)
-            self.FB, self.FBC, self.F2B, self.FBFy = utils_sr.pre_calculate(img, self.k_tensor, self.sf)
+            self.FB, self.FBC, self.F2B, self.FBFy = utils_sr.pre_calculate(img, self.k_tensor, sf)
         elif self.degradation_mode == 'inpainting':
-            self.M = array2tensor(degradation).to(img.device)
+            self.M = degradation
             self.My = self.M*img
         self.noise_level_img=noise_level_img
 

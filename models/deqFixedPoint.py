@@ -91,8 +91,13 @@ class DEQFixedPoint(nn.Module):
         self.jbf=jbf
     def forward(self, n_y, kernel,sigma,gt,degradMode,sf):
         
-        self.f.initialize_prox(n_y,kernel,sigma)
-        sigma=sigma*self.sigmaFactor
+        
+        if degradMode=='inpainting':
+            sigma=torch.tensor([10.0],dtype=torch.float32,device=n_y.device)
+            self.f.initialize_prox(n_y,kernel,0.0,sf)
+        else:
+            sigma=sigma*self.sigmaFactor
+            self.f.initialize_prox(n_y,kernel,sigma,sf)
         if degradMode=='SR':
             rescaledLst=[utils_sr.shift_pixel(cv2.resize(n_y[i,...].detach().permute(1,2,0).cpu().numpy(), (n_y.shape[2] * sf, n_y.shape[3] * sf),interpolation=cv2.INTER_CUBIC),sf) for i in range(n_y.shape[0])]
             degrad=torch.tensor(np.stack(rescaledLst,axis=0),dtype=torch.float32,device=n_y.device).permute(0,3,1,2)
