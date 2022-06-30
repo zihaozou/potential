@@ -2,11 +2,17 @@ import torch
 import torch.nn as nn
 from torch.autograd import grad as torch_grad
 from skimage.metrics import peak_signal_noise_ratio as PSNR
+import cv2
+from utils import utils_sr
+import numpy as np
+def psnr(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
+    # Constant for numerical stability
 
-def mypsnr(img1,img2):
-    mse = torch.mean((img1 - img2) ** 2)
-    return 20 * torch.log10(255.0 / torch.sqrt(mse))
+    mse = torch.mean((x - y) ** 2, dim=[1, 2, 3])
+    score: torch.Tensor =  20 * torch.log10(1. /torch.sqrt(mse))
+
+    return score.mean(dim=0)
 def nesterov(f, x0,gt,max_iter=30):
     """ nesterov acceleration for fixed point iteration. """
     res = []
@@ -63,30 +69,37 @@ def anderson(f, x0, m=5, lam=1e-4, max_iter=30, tol=1e-5, beta = 1.0):
 
 def simpleIter(f, x0, gt,max_iter=30, tol=1e-5):
     x=x0
-    lastpsnr=mypsnr(gt,x0)
+    lastpsnr=psnr(gt,x0)
     for k in range(max_iter):
         xnext = f(x).detach()
-        nowpsnr=mypsnr(gt,xnext)
+        nowpsnr=psnr(gt,xnext)
         #print(nowpsnr)
-        if mypsnr(gt,xnext)<lastpsnr:
+        if nowpsnr<lastpsnr:
             break
         x = xnext
+        # print(psnr(x[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy()))
         lastpsnr=nowpsnr
     return x
 class DEQFixedPoint(nn.Module):
-    def __init__(self, f, solver_img, solver_grad, jbf,**kwargs):
+    def __init__(self, f, solver_img, solver_grad, jbf,sigmaFactor,**kwargs):
         super().__init__()
         self.f = f
         self.solver_img = solver_img
         self.solver_grad = solver_grad
         self.kwargs = kwargs
-        self.sigmaFactor=torch.nn.parameter.Parameter(torch.tensor([1.8]))
+        self.sigmaFactor=torch.nn.parameter.Parameter(torch.tensor([sigmaFactor]))
         self.jbf=jbf
-    def forward(self, n_y, kernel,sigma,gt):
-        n_y.requires_grad_()
+    def forward(self, n_y, kernel,sigma,gt,degradMode,sf):
+        
+        self.f.initialize_prox(n_y,kernel,sigma)
         sigma=sigma*self.sigmaFactor
-        self.f.initialize_prox(n_y,kernel)
-        n_ipt=self.f.calculate_prox(n_y)
+        if degradMode=='SR':
+            rescaledLst=[utils_sr.shift_pixel(cv2.resize(n_y[i,...].detach().permute(1,2,0).cpu().numpy(), (n_y.shape[2] * sf, n_y.shape[3] * sf),interpolation=cv2.INTER_CUBIC),sf) for i in range(n_y.shape[0])]
+            degrad=torch.tensor(np.stack(rescaledLst,axis=0),dtype=torch.float32,device=n_y.device).permute(0,3,1,2)
+        else:
+            degrad=n_y
+        degrad.requires_grad_()
+        n_ipt=self.f.calculate_prox(degrad)
         z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, gt,**self.kwargs)
         z = self.f(z, sigma,self.training)
         # set up Jacobian vector product (without additional forward calls)
@@ -103,6 +116,8 @@ class DEQFixedPoint(nn.Module):
                 return g
 
             self.hook=z.register_hook(backward_hook)
+        if degradMode=='inpainting':
+            return z
         output=self.f.denoise(z,sigma,self.training)
         # print(PSNR(output[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0))
         return output

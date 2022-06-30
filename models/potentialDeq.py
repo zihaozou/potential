@@ -29,36 +29,66 @@ class PotentialDEQ(pl.LightningModule):
             pass #TODO 加入 red potential function
         elif self.hparams.potential=='dpir':
             model=NNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan)
-        f=DPIRPNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb)
-        self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf)
+        f=DPIRPNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb,self.hparams.degradation_mode,self.hparams.sf)
+        self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf,self.hparams.sigmaFactor)
         if self.hparams.enable_pretrained_denoiser:
             self.deq.f.rObj.network.load_state_dict(torch.load(self.hparams.pretrained_denoiser,map_location=torch.device('cpu')))
         self.kernels=loadmat(self.hparams.kernel_path)['kernels']
         self.train_PSNR=PSNR(data_range=1.0)
         for i in range(len(self.hparams.sigma_test_list)*len(self.hparams.kernelLst)):
             exec('self.val_PSNR_%d=PSNR(data_range=1.0)'%i)
-        self.testArrBlur=np.asarray(imopen('img_0_blur.png')).transpose(2,0,1)/255.
-        self.testArrGt=np.asarray(imopen('img_0_input.png')).transpose(2,0,1)/255.
         testLst=[]
         imLst=['butterfly.png','leaves.png','starfish.png']
         for i in range(3):
-            testLst.append(torch.tensor(np.asarray(imopen(join('set3c',imLst[i]))),dtype=torch.float32).permute(2,0,1)/255.)
+            testLst.append(torch.tensor(np.asarray(imopen(join('miscs','set3c',imLst[i]))),dtype=torch.float32).permute(2,0,1)/255.)
         self.testTensor=torch.stack(testLst,dim=0)
         self.val_PSNR_butterfly=PSNR(data_range=1.0)
         self.val_PSNR_leaves=PSNR(data_range=1.0)
         self.val_PSNR_starfish=PSNR(data_range=1.0)
-    def forward(self, n_y,kernel,sigma,gtImg):
-        return self.deq(n_y,kernel,sigma,gtImg)
+        # self.input_im = np.asarray(imopen('/export1/project/zihao/GSPnP/PnP_restoration/SR/GS-DRUNet/HQS/CBSD10/7.65/kernel_0/images/img_0_input.png'),dtype=np.float32)/255.0
+
+        # self.blur_im = np.asarray(imopen('/export1/project/zihao/GSPnP/PnP_restoration/SR/GS-DRUNet/HQS/CBSD10/7.65/kernel_0/images/img_0_GSPnP.png'),dtype=np.float32)/255.0
+    def forward(self, n_y,kernel,sigma,gtImg,degradMode,sf):
+        return self.deq(n_y,kernel,sigma,gtImg,degradMode,sf)
     def makeDegrad(self,gt,kIdx,sigma):
-        kernel=self.kernels[0,kIdx]
-        degradLst=[ndimage.filters.convolve(gt[i,...].permute(1,2,0).cpu().numpy(), np.expand_dims(kernel, axis=2), mode='wrap')+np.random.normal(0, sigma/255., (gt.shape[2],gt.shape[3],gt.shape[1])) for i in range(gt.shape[0])]
-        degradImg=torch.tensor(np.stack(degradLst,axis=0),dtype=torch.float32,device=gt.device).permute(0,3,1,2)
+        if self.hparams.degradation_mode=='deblurring':
+            kernel=self.kernels[0,kIdx]
+            degradLst=[ndimage.filters.convolve(gt[i,...].permute(1,2,0).cpu().numpy(), np.expand_dims(kernel, axis=2), mode='wrap')+np.random.normal(0, sigma/255., (gt.shape[2],gt.shape[3],gt.shape[1])) for i in range(gt.shape[0])]
+            degradImg=torch.tensor(np.stack(degradLst,axis=0),dtype=torch.float32,device=gt.device).permute(0,3,1,2)
+        elif self.hparams.degradation_mode=='SR':
+            kernel=self.kernels[0,kIdx]
+            degradLst=[ndimage.filters.convolve(self.modcrop(gt[i,...].permute(1,2,0).cpu().numpy(),self.hparams.sf), np.expand_dims(kernel, axis=2), mode='wrap')[0::self.hparams.sf,0::self.hparams.sf,...]+np.random.normal(0, sigma/255., (gt.shape[2]//self.hparams.sf,gt.shape[3]//self.hparams.sf,gt.shape[1])) for i in range(gt.shape[0])]
+            degradImg=torch.tensor(np.stack(degradLst,axis=0),dtype=torch.float32,device=gt.device).permute(0,3,1,2)
+        elif self.hparams.degradation_mode=='inpainting':
+            kernel=None
+            degradLst=[self.inpaint(gt[i,...].permute(1,2,0).cpu().numpy())+np.random.normal(0, sigma/255., (gt.shape[2],gt.shape[3],gt.shape[1])) for i in range(gt.shape[0])]
+            degradImg=torch.tensor(np.stack(degradLst,axis=0),dtype=torch.float32,device=gt.device).permute(0,3,1,2)
         return degradImg,kernel
+    def inpaint(self,img):
+        mask = np.random.binomial(n=1, p=self.hparams.prop_mask, size=(img.shape[0],img.shape[1]))
+        mask = np.expand_dims(mask,axis=2)
+        mask_im = img*mask + (0.5)*(1-mask)
+        return mask_im
+        
+    def modcrop(self,img_in, scale):
+    # img_in: Numpy, HWC or HW
+        img = img_in
+        if img.ndim == 2:
+            H, W = img.shape
+            H_r, W_r = H % scale, W % scale
+            img = img[:H - H_r, :W - W_r]
+        elif img.ndim == 3:
+            H, W, C = img.shape
+            H_r, W_r = H % scale, W % scale
+            img = img[:int(H-H_r), :int(W-W_r), :]
+        else:
+            raise ValueError('Wrong img ndim: [{:d}].'.format(img.ndim))
+        return img
     def training_step(self, batch, batch_idx):
         gtImg,_ = batch
         sigma=uniform(self.hparams.sigma_min,self.hparams.sigma_max)
         degradImg,kernel=self.makeDegrad(gtImg,choice(self.hparams.kernelLst),sigma)
-        reconImg=self(degradImg,kernel,sigma,gtImg)
+        reconImg=self(degradImg,kernel,sigma,gtImg,self.hparams.degradation_mode,self.hparams.sf)
         loss=mse_loss(reconImg,gtImg)
         self.log('train_loss',loss.detach(), prog_bar=False,on_step=True,logger=True)
         self.train_PSNR.update(gtImg,reconImg)
@@ -81,7 +111,7 @@ class PotentialDEQ(pl.LightningModule):
         for i, kernelIdx in enumerate(kernelLst):
             for j, sigma in enumerate(sigma_list):
                 degradImg,kernel=self.makeDegrad(gtImg,kernelIdx,sigma)
-                reconImg=self(degradImg,kernel,sigma,gtImg).detach()
+                reconImg=self(degradImg,kernel,sigma,gtImg,self.hparams.degradation_mode,self.hparams.sf).detach()
                 exec('self.val_PSNR_%d.update(gtImg,reconImg)'%(i*len(sigma_list)+j))
                 if batch_idx == 0: # logging for tensorboard
                     clean_grid = torchvision.utils.make_grid(gtImg.detach(),normalize=True,nrow=2)
@@ -98,19 +128,18 @@ class PotentialDEQ(pl.LightningModule):
                 exec('psnr1=self.val_PSNR_%d.compute()'%(i*len(sigma_list)+j))
                 exec(f'self.log(f"val_psnr_kernel-{kernelIdx}_sigma-{sigma}", psnr1.detach(), prog_bar=False,logger=True)')
                 exec('self.val_PSNR_%d.reset()'%(i*len(sigma_list)+j))
-
-
-        testTensorBlur=torch.tensor(self.testArrBlur,dtype=torch.float32,device=self.device).unsqueeze(0)
-        testTensor=torch.tensor(self.testArrGt,dtype=torch.float32,device=self.device).unsqueeze(0)
-        reconImg=self(testTensorBlur,self.kernels[0,1],sigma,testTensor).detach()
-        print(f'test image psnr: {skpsnr(testTensor[0,...].detach().permute(1,2,0).cpu().numpy(),reconImg[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0)}')
+        # kernel=self.kernels[0,0]
+        # sigma=7.65
+        # testTensor=torch.tensor(self.input_im,dtype=torch.float32,device=self.device).permute(2,0,1).unsqueeze(0)
+        # testTensorBlur=torch.tensor(self.blur_im,dtype=torch.float32,device=self.device).permute(2,0,1).unsqueeze(0)
+        # reconImg=self(testTensorBlur,kernel,sigma,testTensor,self.hparams.degradation_mode,self.hparams.sf).detach()
         testTensor=self.testTensor.to(self.device)
         for i, kernelIdx in enumerate(kernelLst):
             for j, sigma in enumerate(sigma_list):
                 degradImg,kernel=self.makeDegrad(testTensor,kernelIdx,sigma)
                 #print(skpsnr(testTensor[0,...].detach().permute(1,2,0).cpu().numpy(),degradImg[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0))
-                reconImg=self(degradImg,kernel,sigma,testTensor).detach()
-                print(f'test image psnr: {skpsnr(testTensor[0,...].detach().permute(1,2,0).cpu().numpy(),reconImg[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0)}')
+                reconImg=self(degradImg,kernel,sigma,testTensor,self.hparams.degradation_mode,self.hparams.sf).detach()
+                #print(f'test image psnr: {skpsnr(testTensor[0,...].detach().permute(1,2,0).cpu().numpy(),reconImg[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0)}')
                 self.val_PSNR_butterfly.update(testTensor[0,...].unsqueeze(0),reconImg[0,...].unsqueeze(0))
                 psnr=self.val_PSNR_butterfly.compute()
                 self.log(f'val_butterfly_psnr_kernel-{kernelIdx}_sigma-{sigma}',psnr.detach())
@@ -151,12 +180,15 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--sigma_min', type=float, default=2.55, help='noise level')
         parser.add_argument('--sigma_max', type=float, default=7.65, help='noise level')
         parser.add_argument('--lamb', type=float, default=0.1, help='regularization parameter')
+        parser.add_argument('--sigmaFactor', type=float, default=2.0, help='sigma factor')
         parser.add_argument('--train_tau_lamb',dest='train_tau_lamb',action='store_true')
         parser.set_defaults(train_tau_lamb=False)
         parser.add_argument('--degradation_mode', type=str, default='deblurring', choices=['deblurring','SR','inpainting'],help='select degradation mode')
         #SR
         parser.add_argument('--sf', type=int, default=2)
         ##
+        parser.add_argument('--n_init', type=int, default=10)
+        parser.add_argument('--prop_mask', type=float, default=0.5)
         parser.add_argument('--kernelLst', type=int, nargs='+', default=[1,3], help='list of kernel indices')
         parser.add_argument('--sigma_test_list', type=float,nargs='+', default=[2.55,7.65], help='list of sigma values')
         parser.add_argument('--optimizer_lr', type=float, default=1e-5, help='learning rate')

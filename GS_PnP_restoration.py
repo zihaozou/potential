@@ -16,7 +16,7 @@ class PnP_restoration():
     def __init__(self, hparams):
 
         self.hparams = hparams
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(self.hparams.gpu if torch.cuda.is_available() else 'cpu')
         self.initialize_cuda_denoiser()
 
     def initialize_cuda_denoiser(self):
@@ -334,14 +334,15 @@ class PnP_restoration():
 
     def add_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
+        parser.add_argument('--gpu', type=str, default="cuda:1", help='gpu to use')
         parser.add_argument('--denoiser_name', type=str, default='GS-DRUNet')
-        parser.add_argument('--dataset_path', type=str, default='set3c')
-        parser.add_argument('--pretrained_checkpoint', type=str,default='pretrained/k-all_sigma-random.pt')
+        parser.add_argument('--dataset_path', type=str, default='miscs/set3c')
+        parser.add_argument('--pretrained_checkpoint', type=str,default='/export/project/zihao/potential/pretrained/SR_k-all_sigma-random.pt')
         parser.add_argument('--PnP_algo', type=str, default='HQS')
         parser.add_argument('--dataset_name', type=str, default='CBSD10')
         parser.add_argument('--sigma_denoiser', type=float)
         parser.add_argument('--noise_level_img', type=float, default=2.55)
-        parser.add_argument('--maxitr', type=int, default=400)
+        parser.add_argument('--maxitr', type=int, default=30)
         parser.add_argument('--lamb', type=float, default=0.1)
         parser.add_argument('--tau', type=float)
         parser.add_argument('--n_images', type=int, default=68)

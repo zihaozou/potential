@@ -18,5 +18,5 @@ if __name__ == '__main__':
     trainer = pl.Trainer.from_argparse_args(hparams, default_root_dir=hparams.exp_name,gpus=hparams.GPULst,
                                             resume_from_checkpoint=hparams.pretrained_checkpoint if hparams.resume_from_checkpoint else None,
                                             gradient_clip_val=hparams.gradient_clip_val, strategy = DDPStrategy(find_unused_parameters=False) if len(hparams.GPULst)>1  else None,
-                                            max_epochs = hparams.max_epochs,num_sanity_val_steps=1,log_every_n_steps=10,val_check_interval=10)
+                                            max_epochs = hparams.max_epochs,num_sanity_val_steps=1,log_every_n_steps=10,val_check_interval=50)
     trainer.fit(model, dm)

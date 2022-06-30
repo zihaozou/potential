@@ -185,7 +185,7 @@ cython_debug/
 
 # Support for Project snippet scope
 .vscode/*.code-snippets
-
+SR/
 # Ignore code-workspaces
 *.code-workspace
 .vscode/
