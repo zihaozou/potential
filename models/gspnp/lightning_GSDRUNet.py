@@ -5,9 +5,8 @@ import pytorch_lightning as pl
 from torch.optim import Adam
 from torch.optim import lr_scheduler
 import random
-import torchmetrics
 from argparse import ArgumentParser
-import cv2
+
 import torchvision
 import numpy as np
 import matplotlib.pyplot as plt
@@ -45,4 +44,15 @@ class StudentGrad(nn.Module):
         JN = torch.autograd.grad(N, x, grad_outputs=x - N, create_graph=create_graph,only_inputs=True)[0]
         Dg = x - N - JN
         return Dg
+    def grad2(self, x, sigma,create_graph=True):
+        x = x.float()
+        x = x.requires_grad_()
+        if x.size(2) % 8 == 0 and x.size(3) % 8 == 0:
+            N = self(x, sigma)
+        else:
+            current_model = lambda v: self(v, sigma)
+            N = test_mode(current_model, x, mode=5, refield=64, min_size=256)
+        JN = torch.autograd.grad(N, x, grad_outputs=x - N, create_graph=create_graph,only_inputs=True)[0]
+        Dg = x - N - JN
+        return Dg,N
 
