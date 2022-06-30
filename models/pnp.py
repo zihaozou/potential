@@ -8,7 +8,6 @@ class PNP(nn.Module):
     def __init__(self,tau,lamb,rObj,degradation_mode,sf=None):
         super(PNP,self).__init__()
         self.tau = nn.parameter.Parameter(torch.tensor([tau]))
-        #self.tau=tau
         self.lamb = lamb
         self.rObj = rObj
         self.degradation_mode = degradation_mode
@@ -91,7 +90,7 @@ class DPIRPNP(nn.Module):
             self.M = degradation
             self.My = self.M*img
         self.noise_level_img=noise_level_img
-
+        self.sf=sf
     def calculate_prox(self, img):
         '''
         Calculation of the proximal mapping of the data term f
