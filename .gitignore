@@ -182,7 +182,7 @@ cython_debug/
 # Ignore all local history of files
 .history
 .ionide
-
+miscs/CBSD*/
 # Support for Project snippet scope
 .vscode/*.code-snippets
 SR/

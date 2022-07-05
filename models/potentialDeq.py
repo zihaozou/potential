@@ -24,13 +24,13 @@ class PotentialDEQ(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(hparams)
         if self.hparams.potential=='gspnp':
-            model=NNclass2(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan)
+            model=NNclass2(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,train_network=self.hparams.train_network)
         elif self.hparams.potential=='potential':
             pass #TODO 加入 red potential function
         elif self.hparams.potential=='dpir':
             model=NNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan)
         f=DPIRPNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb,self.hparams.degradation_mode)
-        self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf,self.hparams.sigmaFactor)
+        self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf,self.hparams.sigmaFactor,self.hparams.train_sigmaFactor)
         if self.hparams.enable_pretrained_denoiser:
             self.deq.f.rObj.network.load_state_dict(torch.load(self.hparams.pretrained_denoiser,map_location=torch.device('cpu')))
         self.kernels=loadmat(self.hparams.kernel_path)['kernels']
@@ -160,8 +160,15 @@ class PotentialDEQ(pl.LightningModule):
                     self.logger.experiment.add_image(f'test_image/noisy/kernel-{kernelIdx}/sigma-{sigma}/sf-{sf}', noisy_grid, self.current_epoch)
                     self.logger.experiment.add_image(f'test_image/recon/kernel-{kernelIdx}/sigma-{sigma}/sf-{sf}', recon_grid, self.current_epoch)
     def configure_optimizers(self):
-        optim_params = [{'params': self.deq.f.rObj.parameters()},{'params': self.deq.sigmaFactor,'lr':1e-3},{'params': self.deq.f.lamb,'lr':1e-3},{'params': self.deq.f.tau,'lr':1e-3}]
-        optimizer = Adam(optim_params, lr=self.hparams.optimizer_lr, weight_decay=0)
+        optim_params=[]
+        if self.hparams.train_network:
+            optim_params.append({'params': self.deq.f.rObj.parameters(), 'lr': self.hparams.network_lr})
+        if self.hparams.train_sigmaFactor:
+            optim_params.append({'params': self.deq.sigmaFactor,'lr':self.hparams.sigmaFactor_lr})
+        if self.hparams.train_tau_lamb:
+            optim_params.append({'params': self.deq.f.tau,'lr':self.hparams.tau_lamb_lr})
+            optim_params.append({'params': self.deq.f.lamb,'lr':self.hparams.tau_lamb_lr})
+        optimizer = Adam(optim_params, weight_decay=1e-8)
         scheduler = lr_scheduler.MultiStepLR(optimizer,
                                              self.hparams.scheduler_milestones,
                                              self.hparams.scheduler_gamma)
@@ -179,8 +186,7 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--sigma_max', type=float, default=7.65, help='noise level')
         parser.add_argument('--lamb', type=float, default=0.1, help='regularization parameter')
         parser.add_argument('--sigmaFactor', type=float, default=2.0, help='sigma factor')
-        parser.add_argument('--train_tau_lamb',dest='train_tau_lamb',action='store_true')
-        parser.set_defaults(train_tau_lamb=False)
+        
         parser.add_argument('--degradation_mode', type=str, default='deblurring', choices=['deblurring','SR','inpainting'],help='select degradation mode')
         #SR
         parser.add_argument('--sf', type=int, nargs='+', default=[2])
@@ -189,7 +195,15 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--prop_mask', type=float, default=0.5)
         parser.add_argument('--kernelLst', type=int, nargs='+', default=[1,3], help='list of kernel indices')
         parser.add_argument('--sigma_test_list', type=float,nargs='+', default=[2.55,7.65], help='list of sigma values')
-        parser.add_argument('--optimizer_lr', type=float, default=1e-5, help='learning rate')
+        parser.add_argument('--no_train_network',dest='train_network',action='store_false')
+        parser.set_defaults(train_network=True)
+        parser.add_argument('--network_lr', type=float, default=1e-5, help='network learning rate')
+        parser.add_argument('--train_sigmaFactor',dest='train_sigmaFactor',action='store_true')
+        parser.set_defaults(train_sigmaFactor=False)
+        parser.add_argument('--sigmaFactor_lr', type=float, default=1e-3, help='sigma factor learning rate')
+        parser.add_argument('--train_tau_lamb',dest='train_tau_lamb',action='store_true')
+        parser.set_defaults(train_tau_lamb=False)
+        parser.add_argument('--tau_lamb_lr', type=float, default=1e-3, help='tau lambda learning rate')
         parser.add_argument('--scheduler_milestones', type=int, nargs='+', default=[10,20,25], help='milestones for scheduler')
         parser.add_argument('--scheduler_gamma', type=float, default=0.8, help='gamma for scheduler')
         parser.add_argument('--resume_from_checkpoint', dest='resume_from_checkpoint', action='store_true')

@@ -13,9 +13,11 @@ class NNclass(nn.Module):
         n = 1.0/tau*self.network(tau*x)
         return n
 class NNclass2(nn.Module):
-    def __init__(self,numInChan=3,numOutChan=3):
+    def __init__(self,numInChan=3,numOutChan=3,train_network=True):
         super(NNclass2,self).__init__()
         self.network=UNetRes(numInChan+1,numOutChan,nc=[64, 128, 256, 512], nb=2, act_mode='E', downsample_mode="strideconv", upsample_mode="convtranspose")
+        for p in self.network.parameters():
+            p.requires_grad = train_network
     def forward(self,x,sigma,create_graph):
         noise_level_map = sigma.expand(x.size(0),1,x.size(2),x.size(3))
         x_noise_map = torch.cat((x, noise_level_map), 1)

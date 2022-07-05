@@ -10,7 +10,7 @@ import sys
 from matplotlib.ticker import MaxNLocator
 from models.pnp import DPIRPNP
 from models.dpirUnet import NNclass2
-
+import pickle
 class PnP_restoration():
 
     def __init__(self, hparams):
@@ -279,7 +279,8 @@ class PnP_restoration():
         plt.legend()
         plt.grid()
         plt.savefig(os.path.join(save_path, 'PSNR.png'))
-
+        with open(os.path.join(save_path, 'PSNR.pk'), 'wb') as f:
+            pickle.dump(self.PSNR, f)
         plt.figure(2)
         fig, ax = plt.subplots()
         ax.spines['right'].set_visible(False)
@@ -288,7 +289,8 @@ class PnP_restoration():
             plt.plot(self.F[i], '-o', markersize=10)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         plt.savefig(os.path.join(save_path, 'F.png'))
-
+        with open(os.path.join(save_path, 'F.pk'), 'wb') as f:
+            pickle.dump(self.F, f)
         plt.figure(3)
         fig, ax = plt.subplots()
         ax.spines['right'].set_visible(False)
@@ -298,7 +300,8 @@ class PnP_restoration():
             plt.semilogy()
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         plt.savefig(os.path.join(save_path, 'conv_log.png'), bbox_inches="tight")
-
+        with open(os.path.join(save_path, 'conv_log.pk'), 'wb') as f:
+            pickle.dump(self.conv, f)
         self.conv2 = [[np.min(self.conv[i][:k]) for k in range(1, len(self.conv[i]))] for i in range(len(self.conv))]
         conv_rate = [self.conv2[i][0]*np.array([(1/k) for k in range(1,len(self.conv2[i]))]) for i in range(len(self.conv2))]
 
@@ -313,7 +316,8 @@ class PnP_restoration():
         plt.legend()
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         plt.savefig(os.path.join(save_path, 'conv_log2.png'), bbox_inches="tight")
-
+        with open(os.path.join(save_path, 'conv_log2.pk'), 'wb') as f:
+            pickle.dump(self.conv2, f)
         plt.figure(5)
         fig, ax = plt.subplots()
         ax.spines['right'].set_visible(False)
@@ -323,14 +327,16 @@ class PnP_restoration():
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         plt.grid()
         plt.savefig(os.path.join(save_path, 'lip_algo.png'))
-
+        with open(os.path.join(save_path, 'lip_algo.pk'), 'wb') as f:
+            pickle.dump(self.lip_algo, f)
         plt.figure(6)
         for i in range(len(self.lip_D)):
             plt.plot(self.lip_D[i], '-o', label='im_' + str(i))
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         plt.grid()
         plt.savefig(os.path.join(save_path, 'lip_D.png'))
-
+        with open(os.path.join(save_path, 'lip_D.pk'), 'wb') as f:
+            pickle.dump(self.lip_D, f)
 
     def add_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)

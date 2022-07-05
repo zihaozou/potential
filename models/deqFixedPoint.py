@@ -81,13 +81,13 @@ def simpleIter(f, x0, gt,max_iter=30, tol=1e-5):
         lastpsnr=nowpsnr
     return x
 class DEQFixedPoint(nn.Module):
-    def __init__(self, f, solver_img, solver_grad, jbf,sigmaFactor,**kwargs):
+    def __init__(self, f, solver_img, solver_grad, jbf,sigmaFactor,train_sigmaFactor,**kwargs):
         super().__init__()
         self.f = f
         self.solver_img = solver_img
         self.solver_grad = solver_grad
         self.kwargs = kwargs
-        self.sigmaFactor=torch.nn.parameter.Parameter(torch.tensor([sigmaFactor]))
+        self.sigmaFactor=torch.nn.parameter.Parameter(torch.tensor([sigmaFactor]),requires_grad=train_sigmaFactor)
         self.jbf=jbf
     def forward(self, n_y, kernel,sigma,gt,degradMode,sf):
         
