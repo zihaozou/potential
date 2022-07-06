@@ -79,7 +79,7 @@ class Denoiser(pl.LightningModule):
                 gtImg=testTensor[j]
                 predImg=denoisedImg[j]
                 outpsnr=psnr(gtImg.detach().cpu().numpy(),predImg.detach().cpu().numpy())
-                self.log('test_PSNR_sigma:{sigma},img_{self.testNames[j]}',outpsnr, prog_bar=False,on_step=False,logger=True)
+                self.log(f'test_PSNR_sigma:{sigma},img_{self.testNames[j]}',outpsnr, prog_bar=False,on_step=False,logger=True)
             clean_grid = torchvision.utils.make_grid(testTensor.detach(),normalize=True,nrow=2)
             noisy_grid = torchvision.utils.make_grid(noisyImgs.detach(),normalize=True,nrow=2)
             recon_grid = torchvision.utils.make_grid(torch.clamp(denoisedImg,min=0.0,max=1.0).detach(),normalize=False,nrow=2)
@@ -107,7 +107,7 @@ class Denoiser(pl.LightningModule):
         parser.set_defaults(resume_from_checkpoint=False)
         parser.add_argument('--pretrained_checkpoint', type=str,default='')
         parser.add_argument('--gradient_clip_val', type=float, default=1e-2)
-        parser.add_argument('--scheduler_milestones', type=int, nargs='+', default=[50,100,150,200,250,300])
-        parser.add_argument('--scheduler_gamma', type=float, default=0.8)
+        parser.add_argument('--scheduler_milestones', type=int, nargs='+', default=[30,90,150,210,290])
+        parser.add_argument('--scheduler_gamma', type=float, default=0.5)
         parser.add_argument('--optimizer_lr', type=float, default=1e-3)
         return parser
