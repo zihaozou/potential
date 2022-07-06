@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-from .gspnp.lightning_GSDRUNet import StudentGrad
 from .pnp import PNP,DPIRPNP
 from .deqFixedPoint import DEQFixedPoint,nesterov,anderson, simpleIter
 from torchmetrics import PeakSignalNoiseRatio as PSNR
@@ -16,7 +15,7 @@ from scipy import ndimage
 import numpy as np
 from os.path import join
 from PIL.Image import open as imopen
-from .dpirUnet import NNclass,NNclass2
+from .dpirUnet import NNclass,NNclass2,NNclass3
 from skimage.metrics import peak_signal_noise_ratio as skpsnr
 
 class PotentialDEQ(pl.LightningModule):
@@ -24,9 +23,9 @@ class PotentialDEQ(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(hparams)
         if self.hparams.potential=='gspnp':
-            model=NNclass2(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,train_network=self.hparams.train_network)
-        elif self.hparams.potential=='potential':
-            pass #TODO 加入 red potential function
+            model=NNclass2(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
+        elif self.hparams.potential=='red potential':
+            model=NNclass3(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
         elif self.hparams.potential=='dpir':
             model=NNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan)
         f=DPIRPNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb,self.hparams.degradation_mode)
@@ -100,7 +99,6 @@ class PotentialDEQ(pl.LightningModule):
         torch.save(self.deq.state_dict(),join(self.hparams.exp_name,f'epoch_{self.current_epoch}.pt'))
     def validation_step(self, batch, batch_idx):
         torch.set_grad_enabled(True)
-        batch_dict = {}
         gtImg,_ = batch
         sigma_list = self.hparams.sigma_test_list
         kernelLst=self.hparams.kernelLst
@@ -178,7 +176,7 @@ class PotentialDEQ(pl.LightningModule):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--kernel_path', type=str, default='miscs/Levin09.mat', help='path to kernel mat file')
         parser.add_argument('--potential', type=str, default='gspnp', help='select potential function')
-        parser.add_argument('--network', type=str, default='dncnn', help='select network')
+        parser.add_argument('--network', type=str, default='unet', help='select network')
         parser.add_argument('--numInChan', type=int, default=3, help='number of input channels')
         parser.add_argument('--numOutChan', type=int, default=3, help='number of output channels')
         parser.add_argument('--tau', type=float, default=10.0, help='regularization parameter')

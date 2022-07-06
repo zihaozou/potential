@@ -24,8 +24,8 @@ class PnP_restoration():
         Initialize the denoiser model with the given pretrained ckpt
         '''
         self.denoiser_model=NNclass2(3,3)
-        self.denoiser_model.network.load_state_dict(torch.load(self.hparams.pretrained_checkpoint))
-        self.denoiser_model.to(self.device)
+        self.denoiser_model.network.load_state_dict(torch.load(self.hparams.pretrained_checkpoint,map_location='cpu'))
+        self.denoiser_model=self.denoiser_model.to(self.device)
     def initialize_prox(self, img, degradation):
         '''
         calculus for future prox computatations
