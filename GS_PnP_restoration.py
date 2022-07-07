@@ -8,7 +8,6 @@ from argparse import ArgumentParser
 from utils.utils_restoration import rgb2y, psnr, array2tensor, tensor2array
 import sys
 from matplotlib.ticker import MaxNLocator
-from models.pnp import DPIRPNP
 from models.dpirUnet import NNclass2
 import pickle
 class PnP_restoration():
