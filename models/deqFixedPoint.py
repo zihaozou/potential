@@ -5,6 +5,7 @@ from skimage.metrics import peak_signal_noise_ratio as PSNR
 import cv2
 from utils import utils_sr
 import numpy as np
+from .dpirUnet import NNclass3,NNclass2
 def psnr(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
     # Constant for numerical stability
@@ -105,12 +106,19 @@ class DEQFixedPoint(nn.Module):
             degrad=n_y
         degrad.requires_grad_()
         n_ipt=self.f.calculate_prox(degrad)
-        z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, gt,**self.kwargs)
-        z = self.f(z, sigma,self.training)
+        if isinstance(self.f.rObj,NNclass2):
+            z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, gt,**self.kwargs)
+            z = self.f(z, sigma,self.training)
+        elif isinstance(self.f.rObj,NNclass3):
+            z= self.solver_img(lambda z : self.f(z,sigma,False,self.training), n_ipt, gt,**self.kwargs)
+            z = self.f(z, sigma,self.training,self.training)
         # set up Jacobian vector product (without additional forward calls)
         if self.training and not self.jbf:
             z0 = z.clone().detach().requires_grad_()
-            f0 = self.f(z0, sigma,True)
+            if isinstance(self.f.rObj,NNclass2):
+                f0 = self.f(z0, sigma,True)
+            elif isinstance(self.f.rObj,NNclass3):
+                f0 = self.f(z0, sigma,True,True)
             def backward_hook(grad):
                 if self.hook is not None:
                     self.hook.remove()
@@ -123,6 +131,6 @@ class DEQFixedPoint(nn.Module):
             self.hook=z.register_hook(backward_hook)
         if degradMode=='inpainting':
             return z
-        output=self.f.denoise(z,sigma,self.training)
+        output=self.f.denoise(z,sigma,self.training,self.training)
         # print(PSNR(output[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0))
         return output

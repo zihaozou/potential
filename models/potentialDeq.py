@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-from .pnp import PNP,DPIRPNP
+from .pnp import PNP
 from .deqFixedPoint import DEQFixedPoint,nesterov,anderson, simpleIter
 from torchmetrics import PeakSignalNoiseRatio as PSNR
 from torch.nn.functional import mse_loss,conv2d,pad
@@ -24,11 +24,10 @@ class PotentialDEQ(pl.LightningModule):
         self.save_hyperparameters(hparams)
         if self.hparams.potential=='gspnp':
             model=NNclass2(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
-        elif self.hparams.potential=='red potential':
+        elif self.hparams.potential=='red_potential':
             model=NNclass3(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
-        elif self.hparams.potential=='dpir':
-            model=NNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan)
-        f=DPIRPNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb,self.hparams.degradation_mode)
+
+        f=PNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb,self.hparams.degradation_mode)
         self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf,self.hparams.sigmaFactor,self.hparams.train_sigmaFactor)
         if self.hparams.enable_pretrained_denoiser:
             self.deq.f.rObj.network.load_state_dict(torch.load(self.hparams.pretrained_denoiser,map_location=torch.device('cpu')))
@@ -88,6 +87,7 @@ class PotentialDEQ(pl.LightningModule):
         self.log('train_loss',loss.detach(), prog_bar=False,on_step=True,logger=True)
         self.train_PSNR.update(gtImg,reconImg)
         psnr=self.train_PSNR.compute()
+        self.train_PSNR.reset()
         self.log('train_psnr',psnr.detach(), prog_bar=True,on_step=True,logger=True)
         self.log('tau',self.deq.f.tau.detach(), prog_bar=False,on_step=True,logger=True)
         self.log('lamb',self.deq.f.lamb.detach(), prog_bar=False,on_step=True,logger=True)
@@ -95,7 +95,7 @@ class PotentialDEQ(pl.LightningModule):
         return {'loss':loss}
 
     def training_epoch_end(self, outputs) -> None:
-        self.train_PSNR.reset()
+        
         torch.save(self.deq.state_dict(),join(self.hparams.exp_name,f'epoch_{self.current_epoch}.pt'))
     def validation_step(self, batch, batch_idx):
         torch.set_grad_enabled(True)

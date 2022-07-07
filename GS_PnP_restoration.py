@@ -369,4 +369,6 @@ class PnP_restoration():
         parser.set_defaults(extract_images=False)
         parser.add_argument('--print_each_step', dest='print_each_step', action='store_true')
         parser.set_defaults(print_each_step=False)
+        parser.add_argument('--red', dest='red', action='store_true')
+        parser.set_defaults(red=False)
         return parser
