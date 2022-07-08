@@ -17,7 +17,7 @@ from os.path import join
 from PIL.Image import open as imopen
 from .dpirUnet import NNclass,NNclass2,NNclass3
 from skimage.metrics import peak_signal_noise_ratio as skpsnr
-
+from utils.utils_restoration import matlab_style_gauss2D
 class PotentialDEQ(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
@@ -48,13 +48,24 @@ class PotentialDEQ(pl.LightningModule):
         # self.blur_im = np.asarray(imopen('/export1/project/zihao/GSPnP/PnP_restoration/SR/GS-DRUNet/HQS/CBSD10/7.65/kernel_0/images/img_0_GSPnP.png'),dtype=np.float32)/255.0
     def forward(self, n_y,kernel,sigma,gtImg,degradMode,sf):
         return self.deq(n_y,kernel,sigma,gtImg,degradMode,sf)
+    def selectKernel(self,kernelIdx):
+        if self.hparams.kernel_path.find('kernels_12.mat') != -1:
+            k = self.kernels[0, kernelIdx]
+        else:
+            if kernelIdx == 8: # Uniform blur
+                k = (1/81)*np.ones((9,9))
+            elif kernelIdx == 9:  # Gaussian blur
+                k = matlab_style_gauss2D(shape=(25,25),sigma=1.6)
+            else: # Motion blur
+                k = self.kernels[0, kernelIdx]
+        return k
     def makeDegrad(self,gt,kIdx,sigma,sf):
         if self.hparams.degradation_mode=='deblurring':
-            kernel=self.kernels[0,kIdx]
+            kernel=self.selectKernel(kIdx)
             degradLst=[ndimage.filters.convolve(gt[i,...].permute(1,2,0).cpu().numpy(), np.expand_dims(kernel, axis=2), mode='wrap')+np.random.normal(0, sigma/255., (gt.shape[2],gt.shape[3],gt.shape[1])) for i in range(gt.shape[0])]
             degradImg=torch.tensor(np.stack(degradLst,axis=0),dtype=torch.float32,device=gt.device).permute(0,3,1,2)
         elif self.hparams.degradation_mode=='SR':
-            kernel=self.kernels[0,kIdx]
+            kernel=self.selectKernel(kIdx)
             degradLst=[ndimage.filters.convolve(self.modcrop(gt[i,...].permute(1,2,0).cpu().numpy(),sf), np.expand_dims(kernel, axis=2), mode='wrap')[0::sf,0::sf,...]+np.random.normal(0, sigma/255., (gt.shape[2]//sf,gt.shape[3]//sf,gt.shape[1])) for i in range(gt.shape[0])]
             degradImg=torch.tensor(np.stack(degradLst,axis=0),dtype=torch.float32,device=gt.device).permute(0,3,1,2)
         elif self.hparams.degradation_mode=='inpainting':
