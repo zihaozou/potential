@@ -5,7 +5,7 @@ from skimage.metrics import peak_signal_noise_ratio as PSNR
 import cv2
 from utils import utils_sr
 import numpy as np
-from .dpirUnet import NNclass3,NNclass2
+from .dpirUnet import DPIRNNclass
 def psnr(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
     # Constant for numerical stability
@@ -39,7 +39,7 @@ def nesterov(f, x0,gt,max_iter=30):
 
     return x
 
-def anderson(f, x0, m=5, lam=1e-4, max_iter=30, tol=1e-5, beta = 1.0):
+def anderson(f, x0, m=5, lam=1e-4, max_iter=24, tol=1e-5, beta = 1.0):
     """ Anderson acceleration for fixed point iteration. """
     bsz, d, H, W = x0.shape
     X = torch.zeros(bsz, m, d*H*W, dtype=x0.dtype, device=x0.device)
@@ -68,18 +68,11 @@ def anderson(f, x0, m=5, lam=1e-4, max_iter=30, tol=1e-5, beta = 1.0):
 
     return X[:,k%m].view_as(x0)
 
-def simpleIter(f, x0, gt,max_iter=30, tol=1e-5):
+def simpleIter(f, x0, gt,max_iter=23, tol=1e-5):
     x=x0
-    lastpsnr=psnr(gt,x0)
     for k in range(max_iter):
-        xnext = f(x).detach()
-        nowpsnr=psnr(gt,xnext)
-        #print(nowpsnr)
-        if nowpsnr<lastpsnr:
-            break
+        xnext = f(x,k).detach()
         x = xnext
-        # print(psnr(x[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy()))
-        lastpsnr=nowpsnr
     return x
 class DEQFixedPoint(nn.Module):
     def __init__(self, f, solver_img, solver_grad, jbf,sigmaFactor,train_sigmaFactor,**kwargs):
@@ -106,19 +99,12 @@ class DEQFixedPoint(nn.Module):
             degrad=n_y
         degrad.requires_grad_()
         n_ipt=self.f.calculate_prox(degrad)
-        if isinstance(self.f.rObj,NNclass2):
-            z= self.solver_img(lambda z : self.f(z,sigma,False), n_ipt, gt,**self.kwargs)
-            z = self.f(z, sigma,self.training)
-        elif isinstance(self.f.rObj,NNclass3):
-            z= self.solver_img(lambda z : self.f(z,sigma,False,self.training), n_ipt, gt,**self.kwargs)
-            z = self.f(z, sigma,self.training,self.training)
+        z= self.solver_img(lambda z ,i: self.f(z,sigma,i,create_graph=False,strict=self.training), n_ipt, gt,**self.kwargs)
+        z = self.f(z, sigma,23,self.training,self.training)
         # set up Jacobian vector product (without additional forward calls)
         if self.training and not self.jbf:
             z0 = z.clone().detach().requires_grad_()
-            if isinstance(self.f.rObj,NNclass2):
-                f0 = self.f(z0, sigma,True)
-            elif isinstance(self.f.rObj,NNclass3):
-                f0 = self.f(z0, sigma,True,True)
+            f0 = self.f(z0, sigma,True,True)
             def backward_hook(grad):
                 if self.hook is not None:
                     self.hook.remove()
@@ -129,7 +115,7 @@ class DEQFixedPoint(nn.Module):
                 return g
 
             self.hook=z.register_hook(backward_hook)
-        if degradMode=='inpainting':
+        if degradMode=='inpainting' or isinstance(self.f.rObj,DPIRNNclass):
             return z
         output=self.f.denoise(z,sigma,self.training,self.training)
         # print(PSNR(output[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0))

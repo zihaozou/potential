@@ -59,6 +59,7 @@ def deblur(hparams):
         exp_out_path=makeOutputPath(hparams.degradation_mode,hparams.denoiser_name,hparams.PnP_algo,hparams.dataset_name,str(hparams.noise_level_img),hparams.kernel_path.split('/')[-1],datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
     logger_info('log', log_path=os.path.join(exp_out_path, 'deblur'+'.log'))
     logger = logging.getLogger('log')
+    logger.info(f'{hparams}')
 
     psnr_list = []
     F_list = []
@@ -114,19 +115,20 @@ def deblur(hparams):
             np.random.seed(seed=0)
             noise = np.random.normal(0, hparams.noise_level_img/255., blur_im.shape)
             blur_im += noise
-            def optimSigFunc(sigFac):
+            if hparams.fine_tune:
+                def optimSigFunc(sigFac):
+                    PnP_module.hparams.sigma_denoiser=sigFac*hparams.noise_level_img
+                    _,output_psnr,_=PnP_module.restore(blur_im,input_im,k)
+                    return -output_psnr
+                sigFac = fminbound(optimSigFunc, 0.1, 5,disp=2,maxfun=25)
                 PnP_module.hparams.sigma_denoiser=sigFac*hparams.noise_level_img
-                _,output_psnr,_=PnP_module.restore(blur_im,input_im,k)
-                return -output_psnr
-            sigFac = fminbound(optimSigFunc, 0.1, 5,disp=2,maxfun=25)
-            PnP_module.hparams.sigma_denoiser=sigFac*hparams.noise_level_img
-            def optimLambFunc(lamb):
+                def optimLambFunc(lamb):
+                    PnP_module.hparams.lamb=lamb
+                    _,output_psnr,_=PnP_module.restore(blur_im,input_im,k)
+                    return -output_psnr
+                lamb = fminbound(optimLambFunc, 0.0, 1.0,disp=2,maxfun=50)
                 PnP_module.hparams.lamb=lamb
-                _,output_psnr,_=PnP_module.restore(blur_im,input_im,k)
-                return -output_psnr
-            lamb = fminbound(optimLambFunc, 0.0, 1.0,disp=2,maxfun=50)
-            PnP_module.hparams.lamb=lamb
-            logger.info(f'__ kernel__{k_index}__ image__{i}__ sigma__{sigFac}__ lamb__{lamb}__')
+            logger.info(f'__ kernel__{k_index}__ image__{i}__ sigma__{PnP_module.hparams.sigma_denoiser}__ lamb__{PnP_module.hparams.lamb}__')
             # PnP restoration
             if hparams.extract_images or hparams.extract_curves or hparams.print_each_step:
                 deblur_im, output_psnr, output_psnrY, x_list, z_list, Dx_list, psnr_tab, Ds_list, s_list, F_list = PnP_module.restore(blur_im,input_im,k, extract_results=True)
@@ -188,6 +190,7 @@ def SR(hparams):
     exp_out_path=makeOutputPath(hparams.degradation_mode,hparams.denoiser_name,hparams.PnP_algo,f'sf={hparams.sf}',hparams.dataset_name,hparams.kernel_path.split('/')[-1],str(hparams.noise_level_img),datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
     logger_info('log', log_path=os.path.join(exp_out_path, 'SR'+'.log'))
     logger = logging.getLogger('log')
+    logger.info(f'{hparams}')
     psnr_list = []
     psnr_list_sr = []
     F_list = []
@@ -246,19 +249,20 @@ def SR(hparams):
             np.random.seed(seed=0)
             noise = np.random.normal(0, hparams.noise_level_img/255., blur_im.shape)
             blur_im += noise
-            def optimSigFunc(sigFac):
+            if hparams.fine_tune:
+                def optimSigFunc(sigFac):
+                    PnP_module.hparams.sigma_denoiser=sigFac*hparams.noise_level_img
+                    _,output_psnr,_=PnP_module.restore(blur_im,input_im,k)
+                    return -output_psnr
+                sigFac = fminbound(optimSigFunc, 0.1, 5,disp=2,maxfun=25)
                 PnP_module.hparams.sigma_denoiser=sigFac*hparams.noise_level_img
-                _,output_psnr,_=PnP_module.restore(blur_im,input_im,k)
-                return -output_psnr
-            sigFac = fminbound(optimSigFunc, 0.1, 5,disp=2,maxfun=25)
-            PnP_module.hparams.sigma_denoiser=sigFac*hparams.noise_level_img
-            def optimLambFunc(lamb):
+                def optimLambFunc(lamb):
+                    PnP_module.hparams.lamb=lamb
+                    _,output_psnr,_=PnP_module.restore(blur_im,input_im,k)
+                    return -output_psnr
+                lamb = fminbound(optimLambFunc, 0.0, 1.0,disp=2,maxfun=50)
                 PnP_module.hparams.lamb=lamb
-                _,output_psnr,_=PnP_module.restore(blur_im,input_im,k)
-                return -output_psnr
-            lamb = fminbound(optimLambFunc, 0.0, 1.0,disp=2,maxfun=50)
-            PnP_module.hparams.lamb=lamb
-            logger.info(f'__ kernel__{k_index}__ image__{i}__ sigma__{sigFac}__ lamb__{lamb}__')
+            logger.info(f'__ kernel__{k_index}__ image__{i}__ sigma__{PnP_module.hparams.sigma_denoiser}__ lamb__{PnP_module.hparams.lamb}__')
             # PnP restoration
             if hparams.extract_images or hparams.extract_curves or hparams.print_each_step:
                 deblur_im, output_psnr, output_psnrY, x_list, z_list, Dx_list, psnr_tab, Ds_list, s_list, F_list = PnP_module.restore(blur_im,input_im,k, extract_results=True)
@@ -327,6 +331,7 @@ def inpaint(hparams):
     kout_path=makeOutputPath(hparams.degradation_mode,hparams.denoiser_name,hparams.PnP_algo,hparams.dataset_name,str(hparams.noise_level_img),'prop_' + str(hparams.prop_mask))
     logger_info('log', log_path=os.path.join(kout_path, 'SR'+'.log'))
     logger = logging.getLogger('log')
+    logger.info(f'{hparams}')
     test_results = OrderedDict()
     test_results['psnr'] = []
 
@@ -353,18 +358,20 @@ def inpaint(hparams):
 
         np.random.seed(seed=0)
         mask_im += np.random.normal(0, hparams.noise_level_img/255., mask_im.shape)
-        def optimSigFunc(sigFac):
+        if hparams.fine_tune:
+            def optimSigFunc(sigFac):
+                PnP_module.hparams.sigma_denoiser=sigFac
+                _,output_psnr,_=PnP_module.restore(mask_im, input_im, mask)
+                return -output_psnr
+            sigFac = fminbound(optimSigFunc, 1, 15,disp=2,maxfun=25)
             PnP_module.hparams.sigma_denoiser=sigFac
-            _,output_psnr,_=PnP_module.restore(mask_im, input_im, mask)
-            return -output_psnr
-        sigFac = fminbound(optimSigFunc, 1, 15,disp=2,maxfun=25)
-        PnP_module.hparams.sigma_denoiser=sigFac
-        def optimLambFunc(lamb):
+            def optimLambFunc(lamb):
+                PnP_module.hparams.lamb=lamb
+                _,output_psnr,_=PnP_module.restore(mask_im, input_im, mask)
+                return -output_psnr
+            lamb = fminbound(optimLambFunc, 0.0, 1.0,disp=2,maxfun=50)
             PnP_module.hparams.lamb=lamb
-            _,output_psnr,_=PnP_module.restore(mask_im, input_im, mask)
-            return -output_psnr
-        lamb = fminbound(optimLambFunc, 0.0, 1.0,disp=2,maxfun=50)
-        PnP_module.hparams.lamb=lamb
+        logger.info(f'image__{i}__ sigma__{PnP_module.hparams.sigma_denoiser}__ lamb__{PnP_module.hparams.lamb}__')
         # PnP restoration
         if hparams.extract_images or hparams.extract_curves or hparams.print_each_step:
             inpainted_im, output_psnr, output_psnrY, x_list, z_list, Dx_list, psnr_tab, Ds_list, s_list, F_list = PnP_module.restore(mask_im, input_im, mask, extract_results=True)
@@ -411,6 +418,8 @@ if __name__ == '__main__':
     parser.add_argument('--kernel_path', type=str, default=os.path.join('miscs','kernels_12.mat'))
     parser.add_argument('--no_crop', dest='crop', action='store_false')
     parser.set_defaults(crop=True)
+    parser.add_argument('--fine_tune', dest='fine_tune', action='store_true')
+    parser.set_defaults(fine_tune=False)
     parser = PnP_restoration.add_specific_args(parser)
     hparams = parser.parse_args()
     if hparams.task == 'SR':

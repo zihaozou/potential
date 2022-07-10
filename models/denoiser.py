@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 import torch
 from argparse import ArgumentParser
-from .dpirUnet import NNclass3
+from .dpirUnet import DPIRNNclass,PotentialNNclass,REDPotentialNNclass,GSPNPNNclass
 from torchmetrics import PeakSignalNoiseRatio as PSNR
 from random import uniform,choice
 from os.path import join
@@ -16,7 +16,14 @@ class Denoiser(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(hparams)
 
-        self.model = NNclass3(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.denoiser_name,train_network=True)
+        if self.hparams.potential=='gspnp':
+            self.model=GSPNPNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
+        elif self.hparams.potential=='red_potential':
+            self.model=REDPotentialNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
+        elif self.hparams.potential=='dpir':
+            self.model=DPIRNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
+        elif self.hparams.potential=='potential':
+            self.model=PotentialNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
         self.train_PSNR=PSNR(data_range=1.0)
         for i in range(len(self.hparams.sigma_test_list)):
             exec('self.val_PSNR_%d=PSNR(data_range=1.0)'%i)
@@ -35,11 +42,11 @@ class Denoiser(pl.LightningModule):
         sigma= uniform(self.hparams.sigma_min,self.hparams.sigma_max)/255.0
         noise=torch.randn_like(gtImg)*sigma
         noisyImg=gtImg+noise
-        predNoise=self(noisyImg,torch.tensor([sigma],dtype=gtImg.dtype,device=gtImg.device),create_graph=True,strict=True)
-        denoisedImg=gtImg-predNoise
+        predImg=self(noisyImg,torch.tensor([sigma],dtype=gtImg.dtype,device=gtImg.device),create_graph=True,strict=True)
+        predNoise=gtImg-predImg
         loss=self.lossFunc(predNoise,noise)*(0.5+0.5*(sigma-self.hparams.sigma_min)/(self.hparams.sigma_max-self.hparams.sigma_min))
         self.log('train_loss',loss.detach(), prog_bar=False,on_step=True,logger=True)
-        self.train_PSNR.update(gtImg,denoisedImg)
+        self.train_PSNR.update(gtImg,predImg)
         psnr=self.train_PSNR.compute().detach()
         self.log('train_PSNR',psnr, prog_bar=True,on_step=True,logger=True)
         self.train_PSNR.reset()
@@ -56,8 +63,8 @@ class Denoiser(pl.LightningModule):
             sigma=sigma_list[i]/255.0
             noise=torch.randn_like(gtImg)*sigma
             noisyImg=gtImg+noise
-            predNoise=self(noisyImg,torch.tensor([sigma],dtype=gtImg.dtype,device=gtImg.device),create_graph=False,strict=False)
-            denoisedImg=gtImg-predNoise
+            predImg=self(noisyImg,torch.tensor([sigma],dtype=gtImg.dtype,device=gtImg.device),create_graph=False,strict=False)
+            predNoise=gtImg-predImg
             loss=self.lossFunc(predNoise,noise)
             exec('self.val_PSNR_%d.update(gtImg,denoisedImg)'%i)
             self.log('val_loss_%d'%i,loss.detach(), prog_bar=False,on_step=False,logger=True)
@@ -73,16 +80,15 @@ class Denoiser(pl.LightningModule):
             sigma=self.hparams.sigma_test_list[i]/255.0
             noise=torch.randn_like(testTensor)*sigma
             noisyImgs=testTensor+noise
-            predNoise=self(noisyImgs,torch.tensor([sigma],dtype=testTensor.dtype,device=testTensor.device),create_graph=False,strict=False)
-            denoisedImg=testTensor-predNoise
+            predImg=self(noisyImgs,torch.tensor([sigma],dtype=testTensor.dtype,device=testTensor.device),create_graph=False,strict=False)
             for j in range(len(testTensor)):
                 gtImg=testTensor[j]
-                predImg=denoisedImg[j]
+                predImg=predImg[j]
                 outpsnr=psnr(gtImg.detach().cpu().numpy(),predImg.detach().cpu().numpy())
                 self.log(f'test_PSNR_sigma:{sigma},img_{self.testNames[j]}',outpsnr, prog_bar=False,on_step=False,logger=True)
             clean_grid = torchvision.utils.make_grid(testTensor.detach(),normalize=True,nrow=2)
             noisy_grid = torchvision.utils.make_grid(noisyImgs.detach(),normalize=True,nrow=2)
-            recon_grid = torchvision.utils.make_grid(torch.clamp(denoisedImg,min=0.0,max=1.0).detach(),normalize=False,nrow=2)
+            recon_grid = torchvision.utils.make_grid(torch.clamp(predImg,min=0.0,max=1.0).detach(),normalize=False,nrow=2)
             self.logger.experiment.add_image(f'test_image/clean/sigma-{sigma}', clean_grid, self.current_epoch)
             self.logger.experiment.add_image(f'test_image/noisy/sigma-{sigma}', noisy_grid, self.current_epoch)
             self.logger.experiment.add_image(f'test_image/recon/sigma-{sigma}', recon_grid, self.current_epoch)

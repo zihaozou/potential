@@ -15,7 +15,7 @@ from scipy import ndimage
 import numpy as np
 from os.path import join
 from PIL.Image import open as imopen
-from .dpirUnet import NNclass,NNclass2,NNclass3
+from .dpirUnet import DPIRNNclass,REDPotentialNNclass,PotentialNNclass,GSPNPNNclass
 from skimage.metrics import peak_signal_noise_ratio as skpsnr
 from utils.utils_restoration import matlab_style_gauss2D
 class PotentialDEQ(pl.LightningModule):
@@ -23,10 +23,13 @@ class PotentialDEQ(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(hparams)
         if self.hparams.potential=='gspnp':
-            model=NNclass2(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
+            model=GSPNPNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
         elif self.hparams.potential=='red_potential':
-            model=NNclass3(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
-
+            model=REDPotentialNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
+        elif self.hparams.potential=='dpir':
+            model=DPIRNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
+        elif self.hparams.potential=='potential':
+            model=PotentialNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
         f=PNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb,self.hparams.degradation_mode)
         self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf,self.hparams.sigmaFactor,self.hparams.train_sigmaFactor)
         if self.hparams.enable_pretrained_denoiser:
