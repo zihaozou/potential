@@ -44,7 +44,7 @@ class Denoiser(pl.LightningModule):
         noisyImg=gtImg+noise
         predImg=self(noisyImg,torch.tensor([sigma],dtype=gtImg.dtype,device=gtImg.device),create_graph=True,strict=True)
         predNoise=gtImg-predImg
-        loss=self.lossFunc(predNoise,noise)*(0.5+0.5*(sigma-self.hparams.sigma_min)/(self.hparams.sigma_max-self.hparams.sigma_min))
+        loss=self.lossFunc(predNoise,noise)
         self.log('train_loss',loss.detach(), prog_bar=False,on_step=True,logger=True)
         self.train_PSNR.update(gtImg,predImg)
         psnr=self.train_PSNR.compute().detach()
@@ -93,7 +93,7 @@ class Denoiser(pl.LightningModule):
             self.logger.experiment.add_image(f'test_image/noisy/sigma-{sigma}', noisy_grid, self.current_epoch)
             self.logger.experiment.add_image(f'test_image/recon/sigma-{sigma}', recon_grid, self.current_epoch)
     def configure_optimizers(self):
-        optimizer = Adam(self.model.parameters(), lr=self.hparams.optimizer_lr,weight_decay=1e-8)
+        optimizer = Adam(self.model.parameters(), lr=self.hparams.optimizer_lr,weight_decay=0)
         scheduler = lr_scheduler.MultiStepLR(optimizer,
                                              self.hparams.scheduler_milestones,
                                              self.hparams.scheduler_gamma)
