@@ -43,8 +43,7 @@ class Denoiser(pl.LightningModule):
         noise=torch.randn_like(gtImg)*sigma
         noisyImg=gtImg+noise
         predImg=self(noisyImg,torch.tensor([sigma],dtype=gtImg.dtype,device=gtImg.device),create_graph=True,strict=True)
-        predNoise=gtImg-predImg
-        loss=self.lossFunc(predNoise,noise)
+        loss=self.lossFunc(gtImg,predImg)
         self.log('train_loss',loss.detach(), prog_bar=False,on_step=True,logger=True)
         self.train_PSNR.update(gtImg,predImg)
         psnr=self.train_PSNR.compute().detach()
