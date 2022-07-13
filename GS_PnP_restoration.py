@@ -355,7 +355,7 @@ class PnP_restoration():
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--gpu', type=str, default="cuda:1", help='gpu to use')
         parser.add_argument('--denoiser_name', type=str, default='GS-DRUNet')
-        parser.add_argument('--dataset_path', type=str, default='miscs/set3c')
+        parser.add_argument('--dataset_path', type=str, default='miscs')
         parser.add_argument('--pretrained_checkpoint', type=str,default='/export/project/zihao/potential/pretrained/SR_k-all_sigma-random.pt')
         parser.add_argument('--PnP_algo', type=str, default='HQS')
         parser.add_argument('--dataset_name', type=str, default='CBSD10')
