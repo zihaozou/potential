@@ -26,7 +26,13 @@ class NNclass(nn.Module):
         x.requires_grad_()
         noise_level_map = sigma.expand(x.size(0),1,x.size(2),x.size(3))
         x_sigma = torch.cat((x, noise_level_map), 1)
-        out = self.postForward(self.network(self.preForward(x_sigma,**kwargs)),x,**kwargs)
+        if x_sigma.size(2) % 8 == 0 and x_sigma.size(3) % 8 == 0:
+            out = self.postForward(self.network(self.preForward(x_sigma,**kwargs)),x,**kwargs)
+        else:
+            out=self.preForward(x_sigma,**kwargs)
+            current_model = lambda v: self.network(v)
+            out=test_mode(current_model, out, mode=5, refield=64, min_size=256)
+            out = self.postForward(out,x,**kwargs)
         return out
 
 class DPIRNNclass(NNclass):
@@ -69,6 +75,6 @@ class PotentialNNclass(NNclass):
     def __init__(self, numInChan=3, numOutChan=3, network='unet', train_network=True):
         super().__init__(numInChan, numOutChan, network, train_network)
     def postForward(self, N, input, **kwargs):
-        N=N.mean([1,2,3]).sum()
+        N=N.mean([1,2,3]).mean()
         JN=grad(N,input,grad_outputs=torch.ones_like(N),create_graph=kwargs['create_graph'],only_inputs=True)[0]
         return JN
