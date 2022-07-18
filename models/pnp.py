@@ -59,13 +59,9 @@ class PNP(nn.Module):
                 proxf = self.My + (1-self.M)*img
         return proxf
     def forward(self,x,sigma,create_graph=True,strict=True):
-        if isinstance(self.rObj,DPIRNNclass):
-            vnext=self.calculate_prox(x)
-            xnext=self.rObj(vnext,sigma/255.,create_graph=create_graph,strict=strict)
-        else:
-            Dx=self.rObj(x,sigma/255.,create_graph=create_graph,strict=strict)
-            z=(1.0-self.lamb*self.tau)*x+self.lamb*self.tau*Dx
-            xnext=self.calculate_prox(z)
+        Dx=self.rObj(x,sigma/255.,create_graph=create_graph,strict=strict)
+        z=(1.0-self.lamb*self.tau)*x+self.lamb*self.tau*Dx
+        xnext=self.calculate_prox(z)
         return xnext
     def denoise(self,x,sigma,create_graph=True,strict=True):
         Dx=self.rObj(x,sigma/255.,create_graph=create_graph,strict=strict)
