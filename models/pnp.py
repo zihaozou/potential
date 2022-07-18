@@ -18,10 +18,9 @@ def get_rho_sigma(sigma=2.55/255, iter_num=15, modelSigma1=49.0, modelSigma2=2.5
     return rhos, sigmas
 
 class PNP(nn.Module):
-    def __init__(self,tau,lamb,rObj,train_tau_lamb,degradation_mode):
+    def __init__(self,lamb,rObj,train_tau_lamb,degradation_mode):
         super(PNP,self).__init__()
         self.rObj=rObj
-        self.tau=torch.nn.parameter.Parameter(torch.tensor(tau),requires_grad=train_tau_lamb)
         self.lamb=torch.nn.parameter.Parameter(torch.tensor(lamb),requires_grad=train_tau_lamb)
         self.degradation_mode=degradation_mode
     def initialize_prox(self, img, degradation,noise_level_img,sf):
@@ -43,36 +42,26 @@ class PNP(nn.Module):
             self.My = self.M*img
         self.noise_level_img=noise_level_img
         self.sf=sf
-        if isinstance(self.rObj,DPIRNNclass):
-            self.rhos, self.sigmas = get_rho_sigma(sigma=max(noise_level_img.item()/255.0,0.01), iter_num=24, modelSigma1=49.0, modelSigma2=max(noise_level_img.item(),float(sf)), w=1.0)
-            self.rhos=torch.tensor(self.rhos,dtype=img.dtype,device=img.device)
-            self.sigmas=torch.tensor(self.sigmas,dtype=img.dtype,device=img.device)
-    def calculate_prox(self, img,iterNum=0):
+    def calculate_prox(self, img):
         '''
         Calculation of the proximal mapping of the data term f
         :param img: input for the prox
         :return: prox_f(img)
         '''
         if self.degradation_mode == 'deblurring':
-            if isinstance(self.rObj,DPIRNNclass):
-                proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=self.rhos[iterNum].expand(1, 1, 1, 1), sf=1)
-            else:
-                proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=1/self.tau, sf=1)
+            proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=1/self.tau, sf=1)
         elif self.degradation_mode == 'SR':
-            if isinstance(self.rObj,DPIRNNclass):
-                proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=self.rhos[iterNum].expand(1, 1, 1, 1), sf=self.sf)
-            else:
-                proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=1/self.tau, sf=self.sf)
+            proxf = utils_sr.data_solution(img, self.FB, self.FBC, self.F2B, self.FBFy, alpha=1/self.tau, sf=self.sf)
         elif self.degradation_mode == 'inpainting':
             if self.noise_level_img > 1e-2:
                 proxf = (self.tau*self.My + img)/(self.tau*self.M+1)
             else :
                 proxf = self.My + (1-self.M)*img
         return proxf
-    def forward(self,x,sigma,iterNum,create_graph=True,strict=True):
+    def forward(self,x,sigma,create_graph=True,strict=True):
         if isinstance(self.rObj,DPIRNNclass):
-            vnext=self.calculate_prox(x,iterNum=iterNum)
-            xnext=self.rObj(vnext,self.sigmas[iterNum])
+            vnext=self.calculate_prox(x)
+            xnext=self.rObj(vnext,sigma/255.,create_graph=create_graph,strict=strict)
         else:
             Dx=self.rObj(x,sigma/255.,create_graph=create_graph,strict=strict)
             z=(1.0-self.lamb*self.tau)*x+self.lamb*self.tau*Dx
@@ -82,3 +71,6 @@ class PNP(nn.Module):
         Dx=self.rObj(x,sigma/255.,create_graph=create_graph,strict=strict)
         z=(1.0-self.lamb*self.tau)*x+self.lamb*self.tau*Dx
         return z
+    @property
+    def tau(self):
+        return 1/self.lamb

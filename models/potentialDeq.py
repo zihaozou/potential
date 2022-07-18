@@ -30,7 +30,7 @@ class PotentialDEQ(pl.LightningModule):
             model=DPIRNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
         elif self.hparams.potential=='potential':
             model=PotentialNNclass(numInChan=self.hparams.numInChan,numOutChan=self.hparams.numOutChan,network=self.hparams.network,train_network=self.hparams.train_network)
-        f=PNP(self.hparams.tau,self.hparams.lamb,model,self.hparams.train_tau_lamb,self.hparams.degradation_mode)
+        f=PNP(self.hparams.lamb,model,self.hparams.train_tau_lamb,self.hparams.degradation_mode)
         self.deq=DEQFixedPoint(f,simpleIter,anderson,self.hparams.jbf,self.hparams.sigmaFactor,self.hparams.train_sigmaFactor)
         if self.hparams.enable_pretrained_denoiser:
             self.deq.f.rObj.network.load_state_dict(torch.load(self.hparams.pretrained_denoiser,map_location=torch.device('cpu')))
@@ -103,7 +103,6 @@ class PotentialDEQ(pl.LightningModule):
         psnr=self.train_PSNR.compute()
         self.train_PSNR.reset()
         self.log('train_psnr',psnr.detach(), prog_bar=True,on_step=True,logger=True)
-        self.log('tau',self.deq.f.tau.detach(), prog_bar=False,on_step=True,logger=True)
         self.log('lamb',self.deq.f.lamb.detach(), prog_bar=False,on_step=True,logger=True)
         self.log('sigma factor',self.deq.sigmaFactor.detach(), prog_bar=False,on_step=True,logger=True)
         return {'loss':loss}
@@ -178,7 +177,6 @@ class PotentialDEQ(pl.LightningModule):
         if self.hparams.train_sigmaFactor:
             optim_params.append({'params': self.deq.sigmaFactor,'lr':self.hparams.sigmaFactor_lr})
         if self.hparams.train_tau_lamb:
-            optim_params.append({'params': self.deq.f.tau,'lr':self.hparams.tau_lamb_lr})
             optim_params.append({'params': self.deq.f.lamb,'lr':self.hparams.tau_lamb_lr})
         optimizer = Adam(optim_params, weight_decay=1e-8)
         scheduler = lr_scheduler.MultiStepLR(optimizer,
@@ -193,7 +191,6 @@ class PotentialDEQ(pl.LightningModule):
         parser.add_argument('--network', type=str, default='unet', help='select network')
         parser.add_argument('--numInChan', type=int, default=3, help='number of input channels')
         parser.add_argument('--numOutChan', type=int, default=3, help='number of output channels')
-        parser.add_argument('--tau', type=float, default=10.0, help='regularization parameter')
         parser.add_argument('--sigma_min', type=float, default=2.55, help='noise level')
         parser.add_argument('--sigma_max', type=float, default=7.65, help='noise level')
         parser.add_argument('--lamb', type=float, default=0.1, help='regularization parameter')

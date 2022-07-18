@@ -83,7 +83,7 @@ class Denoiser(pl.LightningModule):
             for j in range(len(testTensor)):
                 gtImg=testTensor[j]
                 predImg=predImgs[j]
-                outpsnr=psnr(gtImg.detach().cpu().numpy(),predImg.detach().cpu().numpy())
+                outpsnr=psnr(gtImg.detach().cpu().numpy().transpose(1,2,0),predImg.detach().cpu().numpy().transpose(1,2,0),data_range=1.0)
                 self.log(f'test_PSNR_sigma:{sigma},img_{self.testNames[j]}',outpsnr, prog_bar=False,on_step=False,logger=True)
             clean_grid = torchvision.utils.make_grid(testTensor.detach(),normalize=True,nrow=2)
             noisy_grid = torchvision.utils.make_grid(noisyImgs.detach(),normalize=True,nrow=2)

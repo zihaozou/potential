@@ -75,6 +75,6 @@ class PotentialNNclass(NNclass):
     def __init__(self, numInChan=3, numOutChan=3, network='unet', train_network=True):
         super().__init__(numInChan, numOutChan, network, train_network)
     def postForward(self, N, input, **kwargs):
-        N=N.mean([1,2,3]).mean()
+        N=N.mean([1,2,3]).sum()
         JN=grad(N,input,grad_outputs=torch.ones_like(N),create_graph=kwargs['create_graph'],only_inputs=True)[0]
         return JN

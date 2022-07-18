@@ -35,7 +35,7 @@ def nesterov(f, x0,gt,max_iter=30):
         # update
         t = tnext
         x = xnext
-        print(PSNR(x[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0))
+        #print(PSNR(x[0,...].detach().permute(1,2,0).cpu().numpy(),gt[0,...].detach().permute(1,2,0).cpu().numpy(),data_range=1.0))
 
     return x
 
@@ -71,7 +71,7 @@ def anderson(f, x0, m=5, lam=1e-4, max_iter=24, tol=1e-5, beta = 1.0):
 def simpleIter(f, x0, gt,max_iter=23, tol=1e-5):
     x=x0
     for k in range(max_iter):
-        xnext = f(x,k).detach()
+        xnext = f(x).detach()
         x = xnext
     return x
 class DEQFixedPoint(nn.Module):
@@ -99,8 +99,8 @@ class DEQFixedPoint(nn.Module):
             degrad=n_y
         degrad.requires_grad_()
         n_ipt=self.f.calculate_prox(degrad)
-        z= self.solver_img(lambda z ,i: self.f(z,sigma,i,create_graph=False,strict=self.training), n_ipt, gt,**self.kwargs)
-        z = self.f(z, sigma,23,self.training,self.training)
+        z= self.solver_img(lambda z : self.f(z,sigma,create_graph=False,strict=self.training), n_ipt, gt,**self.kwargs)
+        z = self.f(z, sigma,self.training,self.training)
         # set up Jacobian vector product (without additional forward calls)
         if self.training and not self.jbf:
             z0 = z.clone().detach().requires_grad_()
