@@ -1,3 +1,4 @@
+from operator import xor
 from turtle import forward
 import torch
 import torch.nn as nn
@@ -26,7 +27,7 @@ class NNclass(nn.Module):
         x.requires_grad_()
         noise_level_map = sigma.expand(x.size(0),1,x.size(2),x.size(3))
         x_sigma = torch.cat((x, noise_level_map), 1)
-        if x_sigma.size(2) % 8 == 0 and x_sigma.size(3) % 8 == 0:
+        if (x_sigma.size(2) % 8 == 0 and x_sigma.size(3) % 8 == 0):
             out = self.postForward(self.network(self.preForward(x_sigma,**kwargs)),x,**kwargs)
         else:
             out=self.preForward(x_sigma,**kwargs)
@@ -74,7 +75,15 @@ class REDPotentialNNclass(NNclass):
 class PotentialNNclass(NNclass):
     def __init__(self, numInChan=3, numOutChan=3, network='unet', train_network=True):
         super().__init__(numInChan, numOutChan, network, train_network)
+        if network=='unet':
+            self.network=UNetRes(numInChan+2,numOutChan,nc=[64, 128, 256, 512], nb=2, act_mode='E', downsample_mode="strideconv", upsample_mode="convtranspose")
+        elif network=='dncnn':
+            self.network=DnCNN(depth=12, in_channels=numInChan+2, out_channels=numOutChan, init_features=64, kernel_size=3)
+        for p in self.network.parameters():
+            p.requires_grad = train_network
     def postForward(self, N, input, **kwargs):
-        N=N.mean([1,2,3]).sum()
+        N=N.sum()
         JN=grad(N,input,grad_outputs=torch.ones_like(N),create_graph=kwargs['create_graph'],only_inputs=True)[0]
         return JN
+    def preForward(self, x, **kwargs):
+        return torch.cat((x,torch.tensor(float(x.size(2) * x.size(3))/(256.0**2),device=x.device,dtype=x.dtype).expand(x.size(0),1,x.size(2),x.size(3))),dim=1)

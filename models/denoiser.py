@@ -11,6 +11,7 @@ from torchvision.transforms.functional import to_tensor
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from torch.optim import Adam
 from torch.optim import lr_scheduler
+from torchvision.transforms.functional import center_crop
 class Denoiser(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
@@ -34,11 +35,13 @@ class Denoiser(pl.LightningModule):
         self.testNames=['butterfly.png','leaves.png','starfish.png']
         testLst=[to_tensor(imopen(join('miscs','set3c',n)).convert('RGB')) for n in self.testNames]
         self.testTensor=torch.stack(testLst,dim=0)
+        self.cropLst=[(32,32),(64,64),(128,128),(256,256)]
     def forward(self, x,sigma,create_graph=True,strict=True):
         return self.model(x,sigma,create_graph=create_graph,strict=strict)
 
     def training_step(self, batch, batch_idx):
         gtImg,_ = batch
+        gtImg=center_crop(gtImg,choice(self.cropLst))
         sigma= uniform(self.hparams.sigma_min,self.hparams.sigma_max)/255.0
         noise=torch.randn_like(gtImg)*sigma
         noisyImg=gtImg+noise

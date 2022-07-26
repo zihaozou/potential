@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 from utils.utils_restoration import rgb2y, psnr, array2tensor, tensor2array
 import sys
 from matplotlib.ticker import MaxNLocator
-from models.dpirUnet import GSPNPNNclass, REDPotentialNNclass
+from models.dpirUnet import GSPNPNNclass, REDPotentialNNclass,PotentialNNclass
 import pickle
 class PnP_restoration():
 
@@ -24,8 +24,11 @@ class PnP_restoration():
         '''
         if self.hparams.red:
             self.denoiser_model = REDPotentialNNclass(3, 3)
+        elif self.hparams.potential:
+            self.denoiser_model = PotentialNNclass(3, 3)
         else:
             self.denoiser_model=GSPNPNNclass(3,3)
+        
         self.denoiser_model.network.load_state_dict(torch.load(self.hparams.pretrained_checkpoint,map_location='cpu'))
         self.denoiser_model=self.denoiser_model.to(self.device)
     def initialize_prox(self, img, degradation):
@@ -152,7 +155,7 @@ class PnP_restoration():
             x_old = x
 
             #Denoising of x_old and calculation of F_old
-            if self.hparams.red:
+            if self.hparams.red or self.hparams.potential:
                 Dx=self.denoiser_model(x_old,torch.tensor([self.sigma_denoiser / 255.],dtype=x_old.dtype,device=x.device),create_graph=False,strict=False).detach()
             else:
                 Ds, f = self.denoiser_model.calculate_grad(x_old, self.sigma_denoiser / 255.)
@@ -171,7 +174,7 @@ class PnP_restoration():
 
                 # Proximal step
                 x = self.calculate_prox(z)
-                if self.hparams.red!=True:
+                if self.hparams.red!=True and self.hparams.potential!=True:
                     # Calculation of Fnew
                     f = self.denoiser_model.calculate_grad(x, self.sigma_denoiser / 255.)[1]
                     f = f.detach()
@@ -184,7 +187,7 @@ class PnP_restoration():
                     if self.hparams.degradation_mode == 'inpainting':
                         diff_F = 1
                         F_old = 1
-                if self.hparams.red!=True:
+                if self.hparams.red!=True and self.hparams.potential!=True:
                     if self.hparams.use_backtracking and diff_F < (self.hparams.gamma / self.tau) * diff_x and abs(diff_F)/F_old > self.relative_diff_F_min:
                         backtracking_check = False
                         self.tau = self.hparams.eta_tau * self.tau
@@ -207,7 +210,7 @@ class PnP_restoration():
                 x_list.append(out_x)
                 z_list.append(out_z)
                 Dx_list.append(tensor2array(Dx.cpu()))
-                if self.hparams.red!=True:
+                if self.hparams.red!=True and self.hparams.potential!=True:
                     Ds_list.append(torch.norm(Ds).cpu().item())
                     s_list.append(s.cpu().item())
                     F_list.append(F_new)
@@ -216,14 +219,14 @@ class PnP_restoration():
             i += 1 # next iteration
 
         # post-processing gradient step
-        if extract_results and self.hparams.red!=True:
+        if extract_results and self.hparams.red!=True and self.hparams.potential!=True:
             Ds, f = self.denoiser_model.calculate_grad(x, self.sigma_denoiser / 255.)
             Ds = Ds.detach()
             f = f.detach()
             Dx = x - 1.0 * Ds.detach()
             s = 0.5 * (torch.norm(x.double() - f.double(), p=2) ** 2)
         else:
-            if self.hparams.red!=True:
+            if self.hparams.red!=True and self.hparams.potential!=True:
                 Ds, _ = self.denoiser_model.calculate_grad(x, self.sigma_denoiser / 255.)
                 Ds = Ds.detach()
                 Dx = x - 1.0 * Ds
@@ -245,7 +248,7 @@ class PnP_restoration():
                 print('current z PSNR : ', output_psnr)
             z_list.append(tensor2array(z.cpu()))
             Dx_list.append(tensor2array(Dx.cpu()))
-            if self.hparams.red!=True:
+            if self.hparams.red!=True and self.hparams.potential!=True:
                 Ds_list.append(torch.norm(Ds).cpu().item())
                 s_list.append(s.cpu().item())
             return output_img, output_psnr, output_psnrY, np.array(x_list), np.array(z_list), np.array(Dx_list), np.array(psnr_tab), np.array(Ds_list), np.array(s_list), np.array(F_list)
@@ -384,4 +387,6 @@ class PnP_restoration():
         parser.set_defaults(print_each_step=False)
         parser.add_argument('--red', dest='red', action='store_true')
         parser.set_defaults(red=False)
+        parser.add_argument('--potential', dest='potential', action='store_true')
+        parser.set_defaults(potential=False)
         return parser
